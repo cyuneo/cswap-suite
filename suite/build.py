@@ -6,6 +6,7 @@ PyPI dependencies such as textual and claude-agent-sdk).
 
     python3 suite/build.py                # runs suite/test.sh first
     python3 suite/build.py --skip-tests
+    python3 suite/build.py --install      # then install it on this machine
 
 Tests, caches and git data are left out, file modes are normalised (the
 sources live on a drive where everything is 0777), and the build stops if a
@@ -118,6 +119,15 @@ def main():
             tar.add(top, arcname="cswap-suite", filter=add_filter)
     print(OUT)
     print("\n".join(info))
+    if "--install" in sys.argv[1:]:
+        # what a new machine does: unpack anywhere, install.sh copies itself
+        # to the suite prefix and restarts running services
+        with tempfile.TemporaryDirectory() as tmp:
+            with tarfile.open(OUT) as tar:
+                tar.extractall(tmp, filter="data")
+            r = subprocess.run([str(Path(tmp) / "cswap-suite" / "install.sh")])
+        if r.returncode:
+            sys.exit(r.returncode)
 
 
 if __name__ == "__main__":
