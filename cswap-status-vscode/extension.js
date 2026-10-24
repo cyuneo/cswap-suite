@@ -93,6 +93,7 @@ function activate(context) {
     cmd("cswapStatus.accountReserveOn", (n) => manage.setReserve(n, true)),
     cmd("cswapStatus.accountReserveOff", (n) => manage.setReserve(n, false)),
     cmd("cswapStatus.accountRemove", manage.remove),
+    cmd("cswapStatus.accountRelogin", manage.relogin),
     cmd("cswapStatus.startInTmux", () => tmux.startInTmux(false)),
     cmd("cswapStatus.continueInTmux", () => tmux.startInTmux(true)),
     cmd("cswapStatus.autoPause", autoswitch.pause),

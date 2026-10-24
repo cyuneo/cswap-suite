@@ -132,11 +132,17 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   const none = find("没有可切换的账号");
   assert.strictEqual(none.iconPath.color.id, "charts.red");
   assert.ok(!find("冷却中"));
-  const over = ROWS.map((r) => (r.number === "3" ? { ...r, usage5h: 99, state: "limit", blockedWindow: "5h" } : r));
+  const over = ROWS.map((r) => (r.number === "3" ? { ...r, usage5h: 99, state: "limit", blockedWindow: "5h", resetsAt5h: now() + 4520 } : r));
   const exhausted = block();
   exhausted.service = { ...exhausted.service, reason: "policy-exhausted" };
   setPolicy(over, exhausted);
   await T.refresh();
+  // every account at its limit: one warning naming the first one back
+  // (#2 is disabled, #4 quarantined, #1 under its line but excluded by cswap)
+  const warns = shown.warn.length;
+  assert.match(shown.warn[warns - 1], /^所有账号都到上限了，自动切换没有账号可切。最早 #3 在 \d\d:\d\d 恢复（1时15分后）。$/);
+  await T.refresh();
+  assert.strictEqual(shown.warn.length, warns);
   assert.strictEqual(find("#3 距离触发").iconPath.color.id, "charts.red");
   assert.strictEqual(find("当前").label, "当前 #3：无法切换");
   assert.strictEqual(find("当前").iconPath.color.id, "charts.red");

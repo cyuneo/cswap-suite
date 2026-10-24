@@ -109,7 +109,8 @@ const menu = (c) =>
   assert.deepStrictEqual(arcs(c["3"]), [34, 20]);
   assert.strictEqual(c["1"].text, "#1 a@x 主账号 切换 5h 2% 7d 26%");
   assert.strictEqual(c["2"].text, "#2 b@x 已停用 切换 5h 29% 7d 23%");
-  assert.strictEqual(c["6"].text, "#6 f@x 到上限（opus） 切换 5h 10% 7d 10%");
+  // at a limit: no 切换 button (it would be switched back at once)
+  assert.strictEqual(c["6"].text, "#6 f@x 到上限（opus） 5h 10% 7d 10%");
   assert.ok(c["2"].off && !c["1"].off);
   // red at the account's own line, yellow within 15 points of it, a tick
   // where that line is
@@ -124,9 +125,9 @@ const menu = (c) =>
   assert.deepStrictEqual(executed.pop(), ["cswapStatus.autoThreshold"]);
   assert.match(c["2"].html, /title="已停用\npersonal 5h limit"/);
   // right-click items per card
-  assert.deepStrictEqual(menu(c["3"]), ["accountAlias", "accountLimits", "accountReserveOn", "accountDisable", "accountRemove"]);
-  assert.deepStrictEqual(menu(c["1"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOff", "accountDisable", "accountRemove"]);
-  assert.deepStrictEqual(menu(c["2"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOn", "accountEnable", "accountRemove"]);
+  assert.deepStrictEqual(menu(c["3"]), ["accountAlias", "accountLimits", "accountReserveOn", "accountDisable", "accountRelogin", "accountRemove"]);
+  assert.deepStrictEqual(menu(c["1"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOff", "accountDisable", "accountRelogin", "accountRemove"]);
+  assert.deepStrictEqual(menu(c["2"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOn", "accountEnable", "accountRelogin", "accountRemove"]);
 
   // the `state` field wins over the status text
   const withState = ACCOUNTS.map((r) => ({ ...r }));
@@ -142,15 +143,15 @@ const menu = (c) =>
   assert.strictEqual(c["3"].text, "#3 c@x 当前 到上限 5h 99% 7d 20%");
   assert.deepStrictEqual(levels(c["3"]), ["over", ""]);
   assert.strictEqual(item.backgroundColor.id, "statusBarItem.warningBackground");
-  assert.strictEqual(c["5"].text, "#5 e@x 不在时段 切换 5h 60% 7d 10%");
+  assert.strictEqual(c["5"].text, "#5 e@x 不在时段 5h 60% 7d 10%");
   assert.strictEqual(c["6"].text, "#6 f@x 切换 5h 10% 7d 10%");
   // no 切换 (button or menu item) for rows cswap says it cannot switch to
   assert.deepStrictEqual(c["2"].ctx, {
     webviewSection: "account", accountNumber: "2", cswapKind: "unswitchable", cswapOn: false, cswapReserve: false, preventDefaultContextMenuItems: true,
   });
   assert.ok(!c["2"].html.includes('data-cmd="switch"'));
-  assert.deepStrictEqual(menu(c["2"]), ["accountAlias", "accountLimits", "accountReserveOn", "accountEnable", "accountRemove"]);
-  assert.deepStrictEqual(menu(c["4"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOn", "accountDisable", "accountRemove"]);
+  assert.deepStrictEqual(menu(c["2"]), ["accountAlias", "accountLimits", "accountReserveOn", "accountEnable", "accountRelogin", "accountRemove"]);
+  assert.deepStrictEqual(menu(c["4"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOn", "accountDisable", "accountRelogin", "accountRemove"]);
 
   // 切换 on a fine account: no question, runs cswap switch in the background
   const infos = shown.info.length;
@@ -275,7 +276,16 @@ const menu = (c) =>
   assert.ok(!page().includes("<img"));
   assert.strictEqual(c["7"].text, '#7 <img src=x onerror="alert(1)"> 切换 5h 6% 2时 7d 34% 2天');
   assert.match(c["7"].html, /title="5 小时：已用 6%\n用到 98% 切换\n2 小时后重置（\d\d-\d\d \d\d:\d\d）"/);
-  assert.strictEqual(c["8"].text, "#8 h@x 已停用 读取用量失败（http-400） 用量是 46 分钟前的 5h 4% 7d 34%");
+  // usage cannot be read: its card offers 重新登录
+  assert.strictEqual(c["8"].text, "#8 h@x 已停用 重新登录 读取用量失败（http-400） 用量是 46 分钟前的 5h 4% 7d 34%");
+  assert.match(c["8"].html, /<button data-cmd="relogin" data-n="8">/);
+  // at its 5h limit: when it can be used again instead of a 切换 button
+  setRows([{ number: "9", name: "i@x", active: false, enabled: true, usage5h: 99, usage7d: 30, max5h: 98, max7d: 98, max5hSource: "own",
+    state: "limit", blockedWindow: "5h", switchable: true, resetsAt5h: now + 4520, resetsAt7d: now + 86400 * 3 }]);
+  await T.refresh();
+  c = cards();
+  assert.strictEqual(c["9"].text, "#9 i@x 到上限 1时15分后可用 5h 99% 1时15分 7d 30% 3天");
+  assert.match(c["9"].html, /用到 98% 切换（这个账号自己的上限）/);
   // no accounts: the page's button opens 添加账号
   setRows([]);
   await T.refresh();

@@ -68,6 +68,28 @@ function notifyText(ls) {
   return `cswap 自动切换 ${move}（${f.triggerZh(ls.trigger) || "自动"}）`;
 }
 
+// cswap auto found nothing to switch to: every account is at a limit.
+const EXHAUSTED = new Set(["policy-exhausted", "all-exhausted"]);
+
+// The account that is usable again first: {n, at} or null. An account is
+// back when every window it is over resets.
+function earliestBack(rows, now) {
+  let best = null;
+  for (const r of rows) {
+    if (!r.number || r.enabled === false || r.quarantined) continue;
+    const resets = [
+      [r.usage5h, r.max5h, r.resetsAt5h],
+      [r.usage7d, r.max7d, r.resetsAt7d],
+    ]
+      .filter(([u, m, t]) => u != null && m != null && Number(u) >= Number(m) && t)
+      .map(([, , t]) => Number(t));
+    if (!resets.length) continue;
+    const at = Math.max(...resets);
+    if (at > now && (!best || at < best.at)) best = { n: r.number, at };
+  }
+  return best;
+}
+
 // Called after every accounts refresh with accounts.state.
 async function update(acc) {
   const data = acc.data;
@@ -86,6 +108,17 @@ async function update(acc) {
       vscode.window.showInformationMessage(notifyText(ls));
     }
     state.seenSwitchAt = at;
+    // once per episode: from here on Claude itself reports its limit
+    const svc = state.block.service;
+    const exhausted = !!(svc && EXHAUSTED.has(svc.reason) && !svc.stale);
+    if (exhausted && !state.exhausted) {
+      const now = nowSec();
+      const b = earliestBack(state.rows, now);
+      vscode.window.showWarningMessage(
+        `所有账号都到上限了，自动切换没有账号可切。${b ? `最早 #${b.n} 在 ${f.clock(b.at)} 恢复（${f.shortSpan(b.at - now)}后）。` : ""}`
+      );
+    }
+    state.exhausted = exhausted;
   }
   state.status = state.error ? { kind: "none", paused: false } : serviceStatus(state.block, state.legacy, nowSec());
   vscode.commands.executeCommand("setContext", "cswapAuto.state", state.status.kind);
@@ -215,7 +248,7 @@ function rulesRow(block) {
       `阈值：${f.pct(t)}%（没有个人上限的账号用到这里就切）`,
       weekly ? `每周阈值：${f.pct(block.weeklyThreshold)}%` : "每周阈值：未设（7d 也用上面的阈值）",
       own.length
-        ? `用自己上限的账号（不看阈值）：${own.map((r) => `#${r.number} 5h ${f.pct(r.max5h)}% · 7d ${f.pct(r.max7d)}%`).join("；")}。改：账号右键「个人上限…」，留空就跟随阈值`
+        ? `用自己上限的账号（不看阈值）：${own.map((r) => `#${r.number} 5h ${f.pct(r.max5h)}% · 7d ${f.pct(r.max7d)}%`).join("；")}。改：账号右键「切换上限…」，留空就跟随阈值`
         : "",
       `检查间隔：${block.intervalSeconds ?? "?"} 秒`,
       `冷却：${block.cooldownSeconds ?? "?"} 秒（只限制提前切换、回到副账号、时段、先用完）`,

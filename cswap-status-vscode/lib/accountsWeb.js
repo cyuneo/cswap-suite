@@ -46,7 +46,7 @@ function at(p, r) {
 // One usage window as a ring: the window and its percentage inside, when it
 // resets under it. The ring turns yellow within NEAR_MARGIN of the account's
 // own line and red at it; a tick marks that line, where cswap switches away.
-function ringHtml(label, name, used, max, resetsAt, now) {
+function ringHtml(label, name, used, max, source, resetsAt, now) {
   const known = used !== null && used !== undefined;
   const u = known ? Math.max(0, Math.min(100, Number(used))) : 0;
   const m = max === null || max === undefined ? null : Number(max);
@@ -62,13 +62,20 @@ function ringHtml(label, name, used, max, resetsAt, now) {
   const cap = left === null ? "" : left <= 0 ? "已重置" : f.shortSpan(left);
   const tip = [
     `${name}：已用 ${f.pct(used)}%`,
-    m !== null && `用到 ${f.pct(m)}% 切换`,
+    m !== null && `用到 ${f.pct(m)}% 切换${source === "own" ? "（这个账号自己的上限）" : source ? "（跟随阈值）" : ""}`,
     resetsAt && `${resetText(resetsAt, now)}（${f.dayClock(resetsAt)}）`,
   ];
   return `<div class="ring${level}" title="${esc(tip.filter(Boolean).join("\n"))}">
 <svg viewBox="0 0 40 40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="16"/>${arc}${tick}<text class="k" x="20" y="14.5">${label}</text><text x="20" y="24.5">${known ? `${Math.round(u)}%` : "?"}</text></svg>
 <div class="cap">${cap}</div>
 </div>`;
+}
+
+// "1时15分后可用" for an account at its limit: when its blocking window resets.
+function backAt(r, now) {
+  const at = r.blockedWindow === "5h" ? r.resetsAt5h : r.blockedWindow === "7d" ? r.resetsAt7d : null;
+  if (!at || Number(at) <= now) return "";
+  return `${f.shortSpan(Number(at) - now)}后可用`;
 }
 
 function cardHtml(r, now) {
@@ -80,7 +87,12 @@ function cardHtml(r, now) {
   if (st === "limit") tags.push(`<span class="tag warn">${["5h", "7d"].includes(r.blockedWindow) ? "到上限" : esc(f.statusZh(r))}</span>`);
   else if (!["active", "ready", "reserve"].includes(st)) tags.push(`<span class="tag">${esc(f.statusZh(r))}</span>`);
   if (r.reserve) tags.push('<span class="tag main">主账号</span>');
-  if (ctx.cswapKind === "other") tags.push(`<button data-cmd="switch" data-n="${esc(r.number)}">切换</button>`);
+  if (r.number && (r.lastError || r.quarantined)) tags.push(`<button data-cmd="relogin" data-n="${esc(r.number)}">重新登录</button>`);
+  else if (st === "limit" || st === "off-schedule") {
+    // switching there would be undone at once: say when it is usable instead
+    const back = backAt(r, now);
+    if (back) tags.push(`<span class="dim small">${esc(back)}</span>`);
+  } else if (ctx.cswapKind === "other") tags.push(`<button data-cmd="switch" data-n="${esc(r.number)}">切换</button>`);
   const name = r.name || r.email || "?";
   const tip = [r.email && r.email !== name && r.email, f.accountDetail(r), r.reason].filter(Boolean).join("\n");
   const notes = [];
@@ -93,8 +105,8 @@ function cardHtml(r, now) {
 ${tags.length ? `<div class="tags">${tags.join("")}</div>` : ""}
 ${notes.map((n) => `<div class="note">${esc(n)}</div>`).join("")}
 </div>
-${ringHtml("5h", "5 小时", r.usage5h, r.max5h, r.resetsAt5h, now)}
-${ringHtml("7d", "7 天", r.usage7d, r.max7d, r.resetsAt7d, now)}
+${ringHtml("5h", "5 小时", r.usage5h, r.max5h, r.max5hSource, r.resetsAt5h, now)}
+${ringHtml("7d", "7 天", r.usage7d, r.max7d, r.max7dSource, r.resetsAt7d, now)}
 </section>`;
 }
 
@@ -102,7 +114,7 @@ ${ringHtml("7d", "7 天", r.usage7d, r.max7d, r.resetsAt7d, now)}
 function thresholdHtml(a) {
   if (typeof a.threshold !== "number") return "";
   const weekly = typeof a.weeklyThreshold === "number" ? ` · 7d ${f.pct(a.weeklyThreshold)}%` : "";
-  const tip = "自动切换阈值：没设个人上限的账号用到这里就切换。点击修改；单个账号的上限在右键菜单「个人上限…」。";
+  const tip = "自动切换阈值：没设自己上限的账号用到这里就切换。点击修改；单个账号在右键菜单「切换上限…」里设。";
   return `<button class="link" data-cmd="threshold" title="${esc(tip)}">阈值 ${f.pct(a.threshold)}%${weekly}</button>`;
 }
 
@@ -157,6 +169,7 @@ button.link:hover { background: none; text-decoration: underline; }
 .ring text.k { font-size: 7.5px; fill: var(--vscode-descriptionForeground); }
 .cap { min-height: 12px; font-size: 10px; line-height: 1.2; margin: 1px -3px 0; white-space: nowrap; color: var(--vscode-descriptionForeground); }
 .dim, .note, .empty { color: var(--vscode-descriptionForeground); }
+.small { font-size: .85em; }
 .note { font-size: .85em; margin-top: 3px; }
 .err { color: var(--vscode-errorForeground); margin-top: 6px; }
 .warnline { color: var(--vscode-editorWarning-foreground); font-size: .9em; margin-top: 8px; }
@@ -212,6 +225,7 @@ class AccountsView {
     if (!m) return;
     if (m.type === "ready") return this.update();
     if (m.type === "switch") return accounts.switchAccount({ accountNumber: m.n });
+    if (m.type === "relogin") return manage.relogin({ accountNumber: m.n });
     if (m.type === "add") return manage.addAccount();
     if (m.type === "threshold") return vscode.commands.executeCommand("cswapStatus.autoThreshold");
   }

@@ -49,17 +49,26 @@ async function addToken() {
   if (r) vscode.window.showInformationMessage(`已添加：${lastLine(r.out) || "完成"}`);
 }
 
+const emailOf = (r) => r.email || (String(r.name || "").includes("@") ? r.name : "");
+
 // Opens Claude Code's official login in a terminal, then adds whichever
 // account ends up logged in. Ends when the login changes, the terminal
-// closes, or after 15 minutes.
-async function loginAndAdd() {
+// closes, or after 15 minutes. With opts.row it re-logs that account in:
+// its email is filled in, a different login is not added, and afterwards
+// cswap switches back to the account that was in use.
+async function loginAndAdd(opts) {
+  const row = (opts && opts.row) || null;
   const claude = resolveBin(null, "claude");
   if (!claude) return vscode.window.showErrorMessage("找不到 claude 命令（~/.local/bin 或 PATH）");
   const before = await authStatus(claude);
   const current = activeRow();
+  const back = row && current && String(current.number) !== String(row.number) ? current : null;
   const notes = ["登录会换掉这台电脑当前的 Claude 登录，所有正在运行的 Claude 会话都会跟着换到新账号。"];
   const buttons = ["打开登录"];
-  if (current) notes.push(`当前账号 #${current.number} 已经在 cswap 里，之后随时可以切回来。`);
+  if (row) {
+    notes.unshift(`重新登录 #${row.number}（${emailOf(row)}），更新 cswap 里保存的这个账号。`);
+    if (back) notes.push(`完成后自动切回现在用的 #${back.number}。`);
+  } else if (current) notes.push(`当前账号 #${current.number} 已经在 cswap 里，之后随时可以切回来。`);
   else if (before && before.loggedIn) {
     notes.push("当前登录的账号还没加进 cswap，换掉之前最好先保存它。");
     buttons.unshift("先保存当前账号，再登录");
@@ -67,17 +76,21 @@ async function loginAndAdd() {
   const go = await vscode.window.showWarningMessage(notes.join("\n\n"), { modal: true }, ...buttons);
   if (!go) return;
   if (go === "先保存当前账号，再登录" && !(await addCurrent())) return;
-  const email = await vscode.window.showInputBox({
-    title: "登录新账号",
-    prompt: "要登录的邮箱（可以留空；填了会预先填进登录页）",
-    ignoreFocusOut: true,
-  });
+  const email = row
+    ? emailOf(row)
+    : await vscode.window.showInputBox({
+        title: "登录新账号",
+        prompt: "要登录的邮箱（可以留空；填了会预先填进登录页）",
+        ignoreFocusOut: true,
+      });
   if (email === undefined) return;
   const args = ["auth", "login"];
   if (email.trim()) args.push("--email", email.trim());
   const term = vscode.window.createTerminal({ name: "Claude 登录", shellPath: claude, shellArgs: args });
   term.show();
-  vscode.window.showInformationMessage("按终端里的提示在浏览器登录。登录成功后会自动加进 cswap，终端可以关掉。");
+  vscode.window.showInformationMessage(
+    row ? `按终端里的提示在浏览器登录 ${email}。登录成功后关掉这个终端，就会更新 #${row.number}。` : "按终端里的提示在浏览器登录。登录成功后会自动加进 cswap，终端可以关掉。"
+  );
 
   const was = who(before);
   let done = false;
@@ -92,7 +105,14 @@ async function loginAndAdd() {
     // After the terminal closed, add whatever is logged in (logging in to
     // the same account again only refreshes its slot in cswap).
     if (reason === "changed" || (reason === "closed" && who(now))) {
-      await addCurrent();
+      if (row && emailOf(row) && now.email && now.email.toLowerCase() !== emailOf(row).toLowerCase()) {
+        vscode.window.showWarningMessage(`登录的是 ${now.email}，不是 #${row.number} 的 ${emailOf(row)}，没有更新 #${row.number}。`);
+        return;
+      }
+      if ((await addCurrent()) && back) {
+        if (await accounts.runCswap(["switch", String(back.number)], { title: `切回 #${back.number}…`, quiet: true }))
+          vscode.window.setStatusBarMessage(`$(check) #${row.number} 已重新登录，已切回 #${back.number}`, 8000);
+      }
       return;
     }
     vscode.window.showWarningMessage(reason === "timeout" ? "等了 15 分钟还没有登录成功，已停止等待。" : "没有检测到新的登录，没有添加账号。");
@@ -168,9 +188,11 @@ async function setAlias(node) {
 function limitInput(n, label, row, key) {
   const own = row[`${key}Source`] === "own";
   const threshold = accounts.state.data && accounts.state.data.autoswitch ? accounts.state.data.autoswitch.threshold : null;
+  const t = threshold != null ? ` ${f.pct(threshold)}%` : "";
+  const now = own && row[key] != null ? `现在是它自己的 ${f.pct(row[key])}%` : `现在跟随阈值${t}`;
   return vscode.window.showInputBox({
-    title: `#${n} 的${label}个人上限`,
-    prompt: `用到这个百分比就切走（1-100）；留空 = 跟随全局阈值${threshold != null ? ` ${f.pct(threshold)}%` : ""}`,
+    title: `#${n} 的${label}用到多少 % 切走`,
+    prompt: `${now}。填 1-100 给它自己的上限；留空 = 跟随阈值${t}（阈值在账号面板右上角改）`,
     value: own && row[key] != null ? String(row[key]) : "",
     validateInput: (v) => {
       if (!v.trim()) return null;
@@ -190,9 +212,12 @@ async function setLimits(node) {
   if (seven === undefined) return;
   const r = await accounts.runCswap(
     ["policy", "set", n, "--max-5h", five.trim() || "default", "--max-7d", seven.trim() || "default"],
-    { title: `设置 #${n} 的个人上限…` }
+    { title: `设置 #${n} 的切换上限…` }
   );
-  if (r) vscode.window.showInformationMessage(`#${n} 的上限：5h ${five.trim() || "跟随阈值"}，7d ${seven.trim() || "跟随阈值"}。自动切换下次检查就按这个来。`);
+  if (r)
+    vscode.window.showInformationMessage(
+      `#${n} 用到 5h ${five.trim() ? `${five.trim()}%` : "阈值"}、7d ${seven.trim() ? `${seven.trim()}%` : "阈值"} 切走。自动切换下次检查就按这个来。`
+    );
 }
 
 // 主账号 is cswap's reserve flag: used only when the other accounts are at
@@ -211,6 +236,20 @@ async function setReserve(node, reserve) {
   vscode.window.showInformationMessage(
     `#${n} 是主账号了：其他账号都到上限时才用它，其他账号一恢复就切回去。${old.length ? `（${old.map((x) => `#${x.number}`).join("、")} 不再是主账号）` : ""}`
   );
+}
+
+// For an account whose saved login stopped working (usage cannot be read).
+async function relogin(node) {
+  const n = numOf(node);
+  if (!n) return;
+  const row = rowOf(node);
+  if (/@token\.local$/i.test(emailOf(row)) || !emailOf(row)) {
+    vscode.window.showInformationMessage(
+      `#${n} 是用 setup-token 添加的，没法在浏览器重新登录：删除它，再用新的 setup-token 添加（＋ →「粘贴 setup-token 或 API key」）。`
+    );
+    return;
+  }
+  return loginAndAdd({ row: { ...row, number: n } });
 }
 
 async function remove(node) {
@@ -246,6 +285,7 @@ module.exports = {
   setAlias,
   setLimits,
   setReserve,
+  relogin,
   remove,
   timing,
 };

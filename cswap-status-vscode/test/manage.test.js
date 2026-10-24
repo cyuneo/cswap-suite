@@ -34,6 +34,7 @@ const OK = {
   "policy set": { out: "ok" },
   "policy remove": { out: "Removed policy" },
   remove: { out: "Removed" },
+  switch: { out: "Switched" },
 };
 const setCswap = (rows) => cswap.set({ ...OK, "policy list": { out: { schemaVersion: 1, accounts: rows, autoswitch: { threshold: 98 } } } });
 const calls = (cmd) => cswap.calls().filter((c) => c.argv[0] === cmd);
@@ -130,6 +131,39 @@ const waitFor = async (cond) => {
   ]);
   assert.strictEqual(shown.info.pop(), "#2 不再是主账号，和其他账号一样轮换。");
   assert.strictEqual(shown.info.pop(), "#1 是主账号了：其他账号都到上限时才用它，其他账号一恢复就切回去。（#2 不再是主账号）");
+
+  // 重新登录: that account's email filled in; once it is logged in, cswap add
+  // refreshes it and cswap switches back to the account in use
+  setCswap([ROWS[0], { ...ROWS[1], email: "w@x", lastError: "http-400" }]);
+  await T.refresh();
+  loggedIn("a@x");
+  const addsBefore = calls("add").length;
+  answers.warn.push("打开登录");
+  await M.relogin(node("2"));
+  assert.match(shown.warn.pop(), /^重新登录 #2（w@x）[\s\S]*完成后自动切回现在用的 #1。$/);
+  const rt = terminals.pop();
+  assert.deepStrictEqual(rt.options.shellArgs, ["auth", "login", "--email", "w@x"]);
+  loggedIn("w@x");
+  await waitFor(() => calls("switch").length === 1);
+  assert.strictEqual(calls("add").length, addsBefore + 1);
+  assert.deepStrictEqual(calls("switch")[0].argv, ["switch", "1"]);
+  stub.closeTerminal(rt);
+  // someone else logged in: not added under #2
+  loggedIn("a@x");
+  answers.warn.push("打开登录");
+  await M.relogin(node("2"));
+  const rt2 = terminals.pop();
+  loggedIn("z@x");
+  await waitFor(() => shown.warn.some((w) => w.startsWith("登录的是 z@x")));
+  assert.strictEqual(calls("add").length, addsBefore + 1);
+  stub.closeTerminal(rt2);
+  // a setup-token account has no browser login
+  setCswap([ROWS[0], { ...ROWS[1], email: "setup-token-2@token.local" }]);
+  await T.refresh();
+  await M.relogin(node("2"));
+  assert.match(shown.info.pop(), /^#2 是用 setup-token 添加的/);
+  setCswap(ROWS);
+  await T.refresh();
 
   answers.warn.push(undefined);
   await M.remove(node("2"));

@@ -2,7 +2,7 @@
   "name": "cswap-status",
   "displayName": "cswap Status",
   "description": "cswap 侧栏（活动栏图标）：当前机器、每个 claude-swap 账号的 5 小时/7 天用量圆环和一键切换、主账号、cswap 自动切换在做什么（阈值、当前结论、下一个账号、切换记录、暂停/恢复）、api-worker 每个 Console API key 的本月花费和任务；精简的状态栏条目；为所有账号保持 Claude Code 的 Dynamic workflows（Ultracode）开启；在 tmux 里启动 Claude 方便手机操作（cswap-remote）。",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "publisher": "chenyu",
   "license": "MIT",
   "engines": {
@@ -143,7 +143,7 @@
       },
       {
         "command": "cswapStatus.accountLimits",
-        "title": "设置个人上限…",
+        "title": "切换上限…（用到多少 % 切走）",
         "category": "cswap"
       },
       {
@@ -154,6 +154,11 @@
       {
         "command": "cswapStatus.accountReserveOff",
         "title": "取消主账号",
+        "category": "cswap"
+      },
+      {
+        "command": "cswapStatus.accountRelogin",
+        "title": "重新登录…",
         "category": "cswap"
       },
       {
@@ -406,6 +411,11 @@
           "group": "3_rotation@1"
         },
         {
+          "command": "cswapStatus.accountRelogin",
+          "when": "webviewId == 'cswapStatus.accounts' && webviewSection == 'account' && cswapKind != 'none'",
+          "group": "8_login@1"
+        },
+        {
           "command": "cswapStatus.accountRemove",
           "when": "webviewId == 'cswapStatus.accounts' && webviewSection == 'account' && cswapKind != 'none'",
           "group": "9_remove@1"
@@ -458,6 +468,10 @@
         },
         {
           "command": "cswapStatus.accountRemove",
+          "when": "false"
+        },
+        {
+          "command": "cswapStatus.accountRelogin",
           "when": "false"
         },
         {
