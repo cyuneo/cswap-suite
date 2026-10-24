@@ -1,0 +1,12 @@
+[Unit]
+Description=cswap auto: switch Claude accounts before the active one hits its limit
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/cswap auto
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

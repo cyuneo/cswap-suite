@@ -1,0 +1,5 @@
+{
+  "name": "api-worker",
+  "owner": { "name": "cyuneo" },
+  "plugins": [{ "name": "api-worker", "source": "./" }]
+}

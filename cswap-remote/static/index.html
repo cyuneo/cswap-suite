@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Claude Remote">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1b19" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<title>Claude Remote</title>
+</head>
+<body>
+<header id="top">
+  <button class="icon-btn back hidden" id="back" type="button" aria-label="返回">‹</button>
+  <div class="head-text">
+    <h1 id="title">Claude Remote</h1>
+    <div class="head-sub hidden" id="headSub"></div>
+  </div>
+  <button class="chip acct hidden" id="acct" type="button"></button>
+  <button class="icon-btn hidden" id="menuBtn" type="button" aria-label="菜单">⋯</button>
+</header>
+<main id="main"></main>
+<div id="dock" class="dock hidden"></div>
+<button type="button" id="newPill" class="new-pill hidden">↓ 新消息</button>
+<div id="sheetWrap" class="sheet-wrap hidden">
+  <div class="sheet-backdrop" id="sheetBackdrop"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+</div>
+<dialog id="newDlg">
+  <form method="dialog" id="newForm">
+    <b>新建会话（在 tmux 里运行 claude）</b>
+    <label for="nDir">项目目录</label>
+    <select id="nDir"></select>
+    <label for="nDirText">或者输入路径</label>
+    <input id="nDirText" placeholder="/path/to/project" autocomplete="off" autocapitalize="off">
+    <label for="nName">名称（可选）</label>
+    <input id="nName" placeholder="默认用目录名" autocomplete="off" autocapitalize="off">
+    <label class="check"><input type="checkbox" id="nResume"> 接着这个目录上次的对话（--continue）</label>
+    <div class="row end mt">
+      <button value="cancel" type="button" id="nCancel">取消</button>
+      <button class="primary" value="ok" id="nOk">启动</button>
+    </div>
+  </form>
+</dialog>
+<script src="md.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

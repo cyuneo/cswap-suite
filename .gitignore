@@ -1,0 +1,14 @@
+# claude-swap keeps its own git history (branch chenyu-account-policy)
+/claude-swap/
+# build output: rebuild with python3 suite/build.py
+/dist/
+*.vsix
+*.tar.gz
+# not part of the cswap suite
+/xray/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+.venv/
+.env

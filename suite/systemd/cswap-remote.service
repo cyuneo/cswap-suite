@@ -1,0 +1,11 @@
+[Unit]
+Description=cswap-remote (self-hosted remote control for Claude Code)
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/cswap-remote serve --host tailscale
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
