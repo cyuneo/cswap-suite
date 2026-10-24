@@ -4,7 +4,8 @@ by its install.sh. cswap goes in as a wheel built from claude-swap/, so the
 new machine downloads nothing from the original claude-swap project (only
 PyPI dependencies such as textual and claude-agent-sdk).
 
-    python3 suite/build.py
+    python3 suite/build.py                # runs suite/test.sh first
+    python3 suite/build.py --skip-tests
 
 Tests, caches and git data are left out, file modes are normalised (the
 sources live on a drive where everything is 0777), and the build stops if a
@@ -45,8 +46,10 @@ def versions(cswap_dir, wheel):
     pkg = json.loads((ROOT / "cswap-status-vscode" / "package.json").read_text(encoding="utf-8"))
     worker = json.loads((ROOT / "api-worker" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     cswap_version = wheel.name.split("-")[1]
+    suite = run("git", "rev-parse", "--short", "HEAD", cwd=ROOT)
+    suite_dirty = "+未提交的改动" if run("git", "status", "--porcelain", cwd=ROOT) else ""
     return [
-        f"cswap-suite {time.strftime('%Y-%m-%d')}",
+        f"cswap-suite {time.strftime('%Y-%m-%d')} ({suite}{suite_dirty})",
         f"cswap {cswap_version} ({commit}{dirty})",
         f"cswap-status {pkg['version']}",
         f"api-worker {worker.get('version', '?')}",
@@ -80,6 +83,9 @@ def mode_filter(info):
 
 
 def main():
+    if "--skip-tests" not in sys.argv[1:]:
+        if subprocess.run([str(SUITE / "test.sh")]).returncode != 0:
+            sys.exit("tests failed: nothing was packed (--skip-tests packs anyway)")
     cswap_dir = ROOT / "claude-swap"
     with tempfile.TemporaryDirectory() as tmp:
         top = Path(tmp) / "cswap-suite"

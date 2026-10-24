@@ -481,6 +481,6 @@
     }
   },
   "scripts": {
-    "test": "node test/api.test.js && node test/accounts.test.js && node test/autoswitch.test.js && node test/workflows.test.js"
+    "test": "for t in test/*.test.js; do node \"$t\" || exit 1; done"
   }
 }
