@@ -138,6 +138,16 @@ function bodyHtml(state, opts) {
   return out.join("\n");
 }
 
+// bodyHtml that never throws: a bug in it shows on the page instead of a
+// blank view.
+function safeBody(state) {
+  try {
+    return bodyHtml(state);
+  } catch (e) {
+    return `<div class="err">账号面板出错：${esc((e && e.message) || e)}<br>请把这句话发给维护者；终端里 cswap list 仍可用。</div>`;
+  }
+}
+
 const CSS = `
 body { padding: 2px 12px 12px; color: var(--vscode-foreground); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
 .top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
@@ -210,7 +220,7 @@ class AccountsView {
   resolveWebviewView(view) {
     this.view = view;
     view.webview.options = { enableScripts: true };
-    view.webview.html = pageHtml(bodyHtml(accounts.state));
+    view.webview.html = pageHtml(safeBody(accounts.state));
     view.webview.onDidReceiveMessage((m) => this.onMessage(m));
     view.onDidDispose(() => {
       if (this.view === view) this.view = null;
@@ -219,7 +229,7 @@ class AccountsView {
   // The page is kept and only its body replaced, so a refresh does not
   // reload it (a hidden view gets the latest body when it says "ready").
   update() {
-    if (this.view) this.view.webview.postMessage({ type: "render", html: bodyHtml(accounts.state) });
+    if (this.view) this.view.webview.postMessage({ type: "render", html: safeBody(accounts.state) });
   }
   onMessage(m) {
     if (!m) return;
@@ -231,4 +241,4 @@ class AccountsView {
   }
 }
 
-module.exports = { AccountsView, bodyHtml, cardContext, pageHtml };
+module.exports = { AccountsView, bodyHtml, safeBody, cardContext, pageHtml };

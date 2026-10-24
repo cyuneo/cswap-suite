@@ -80,6 +80,9 @@ const menu = (c) =>
   stub.webviews["cswapStatus.accounts"].resolveWebviewView(view);
   assert.ok(view.webview.options.enableScripts);
   assert.match(view.webview.html, /读取中…/);
+  // a page that fails to build says why instead of staying blank
+  const web = require("../lib/accountsWeb");
+  assert.match(web.safeBody({ loaded: true, rows: null }), /账号面板出错/);
   for (let i = 0; i < 50 && !statusItems[0].text; i++) await stub.sleep(50);
   const item = statusItems[0];
 
