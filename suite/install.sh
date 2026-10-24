@@ -65,6 +65,21 @@ echo "命令已装到 $bin：cswap、cswap-on-switch（每次切换后运行）�
 if [ "$api" = 1 ]; then
   "$prefix/api-worker/install.sh"
   if command -v claude >/dev/null; then
+    # A folder marketplace is read in place, so it must be the installed copy,
+    # not wherever an earlier install (or a source checkout) registered it.
+    registered="$(claude plugin marketplace list --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit()
+for m in d if isinstance(d, list) else d.get("marketplaces", []):
+    if m.get("name") == "api-worker":
+        print(m.get("path") or m.get("installLocation") or "")
+' || true)"
+    if [ -n "$registered" ] && [ "$registered" != "$prefix/api-worker" ]; then
+      claude plugin marketplace remove api-worker >/dev/null 2>&1 || true
+    fi
     claude plugin marketplace add "$prefix/api-worker" >/dev/null 2>&1 ||
       claude plugin marketplace update api-worker >/dev/null 2>&1 || true
     if claude plugin install api-worker@api-worker >/dev/null 2>&1 ||
