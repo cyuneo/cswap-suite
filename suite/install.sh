@@ -53,8 +53,37 @@ if [ "$here" != "$prefix" ]; then
 fi
 echo "== 安装 $(head -1 "$prefix/VERSION") 到 $prefix"
 
+# A folder that a newer bundle was unpacked over still holds the older
+# packages: keep only the newest of each (by version, not by name order).
+newest() { # glob matches -> the highest version, or nothing
+  local f
+  for f in "$@"; do if [ -e "$f" ]; then printf '%s\n' "$f"; fi; done | sort -V | tail -1
+}
+prune() { # glob matches -> remove all but the newest
+  local keep f
+  keep="$(newest "$@")"
+  for f in "$@"; do
+    if [ -e "$f" ] && [ "$f" != "$keep" ]; then rm -f "$f" && echo "删掉旧包 $(basename "$f")"; fi
+  done
+}
+prune "$prefix"/cswap/claude_swap-*.whl
+prune "$prefix"/cswap-status-*.vsix
+prune "$prefix"/cyuneo-agent-monitor-*.vsix
+
+# The version VS Code reports for an extension id, or nothing
+ext_version() { code --list-extensions --show-versions 2>/dev/null | grep -i "^$1@" | cut -d@ -f2 || true; }
+# Installs a vsix and checks VS Code now reports its version; prints why not
+install_vsix() { # file, id, version
+  local out
+  if ! out="$(code --install-extension "$1" --force 2>&1)"; then
+    printf '%s\n' "$out" | tail -3 | sed 's/^/   /'
+    return 1
+  fi
+  [ "$(ext_version "$2")" = "$3" ] || { echo "   装完 VS Code 报告的版本是 $(ext_version "$2")，不是 $3"; return 1; }
+}
+
 # cswap: replaces any earlier cswap, including the original claude-swap.
-uv tool install --force --python ">=3.12" "$(ls "$prefix"/cswap/claude_swap-*.whl | head -1)"
+uv tool install --force --python ">=3.12" "$(newest "$prefix"/cswap/claude_swap-*.whl)"
 mkdir -p "$bin"
 for link in cswap-on-switch:cswap-hooks/on-switch.sh cswap-satellite:cswap-satellite/cswap_satellite.py \
   cswap-remote:cswap-remote/cswap_remote.py; do
@@ -96,9 +125,11 @@ for m in d if isinstance(d, list) else d.get("marketplaces", []):
 fi
 
 if [ "$vscode" = 1 ]; then
-  vsix="$(ls "$prefix"/cswap-status-*.vsix | head -1)"
-  if command -v code >/dev/null && code --install-extension "$vsix" --force >/dev/null 2>&1; then
-    echo "VS Code 插件已装：重载窗口（Developer: Reload Window）后左侧出现 cswap 图标"
+  vsix="$(newest "$prefix"/cswap-status-*.vsix)"
+  vver="$(basename "$vsix" .vsix)"
+  vver="${vver#cswap-status-}"
+  if command -v code >/dev/null && install_vsix "$vsix" chenyu.cswap-status "$vver"; then
+    echo "VS Code 插件 $vver 已装：重载窗口（Developer: Reload Window）后生效"
   else
     echo "VS Code 插件：在 VS Code 连到这台机器的终端里运行  code --install-extension $vsix"
   fi
@@ -107,14 +138,14 @@ if [ "$vscode" = 1 ]; then
   # bundle -> from the Marketplace.
   monitor_id=cyuneo.cyuneo-agent-monitor
   if [ "$monitor" = 1 ] && command -v code >/dev/null; then
-    mvsix="$(ls "$prefix"/cyuneo-agent-monitor-*.vsix 2>/dev/null | head -1)"
-    have="$(code --list-extensions --show-versions 2>/dev/null | grep -i "^$monitor_id@" | cut -d@ -f2 || true)"
+    mvsix="$(newest "$prefix"/cyuneo-agent-monitor-*.vsix)"
+    have="$(ext_version "$monitor_id")"
     if [ -n "$mvsix" ]; then
       want="$(basename "$mvsix" .vsix)"
       want="${want#cyuneo-agent-monitor-}"
       if [ -n "$have" ] && [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | tail -1)" = "$have" ]; then
         echo "Agent Monitor $have 已经装了"
-      elif code --install-extension "$mvsix" --force >/dev/null 2>&1; then
+      elif install_vsix "$mvsix" "$monitor_id" "$want"; then
         echo "Agent Monitor $want 已装：重载窗口后生效"
       else
         echo "Agent Monitor 没装上：在 VS Code 连到这台机器的终端里运行  code --install-extension $mvsix"
@@ -127,7 +158,7 @@ if [ "$vscode" = 1 ]; then
       echo "Agent Monitor 没装上（要能连到 VS Code 扩展市场）：code --install-extension $monitor_id"
     fi
   elif [ "$monitor" = 1 ]; then
-    mvsix="$(ls "$prefix"/cyuneo-agent-monitor-*.vsix 2>/dev/null | head -1)"
+    mvsix="$(newest "$prefix"/cyuneo-agent-monitor-*.vsix)"
     echo "Agent Monitor：在 VS Code 连到这台机器的终端里运行  code --install-extension ${mvsix:-$monitor_id}"
   fi
 fi
