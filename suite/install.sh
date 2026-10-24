@@ -14,7 +14,7 @@ usage() {
   --remote         另外把手机页面（cswap-remote）装成后台服务（需要 tmux 和 Tailscale）
   --no-api-worker  不装 api-worker
   --no-vscode      不装 VS Code 插件（cswap 侧栏和 Agent Monitor 都不装）
-  --no-monitor     不装 Agent Monitor（从 VS Code 扩展市场装，看所有 Claude/Codex 会话）
+  --no-monitor     不装 Agent Monitor（看所有 Claude/Codex 会话；用包里带的版本，扩展市场上更新时也会更新）
 再运行一次就是更新。
 EOF
 }
@@ -102,11 +102,25 @@ if [ "$vscode" = 1 ]; then
   else
     echo "VS Code 插件：在 VS Code 连到这台机器的终端里运行  code --install-extension $vsix"
   fi
-  # Agent Monitor comes from the Marketplace, so it keeps its own updates.
+  # Agent Monitor: the copy in this bundle unless a newer one is installed
+  # (a later Marketplace release still updates it as usual); no copy in the
+  # bundle -> from the Marketplace.
   monitor_id=cyuneo.cyuneo-agent-monitor
   if [ "$monitor" = 1 ] && command -v code >/dev/null; then
-    if code --list-extensions 2>/dev/null | grep -qix "$monitor_id"; then
-      echo "Agent Monitor 已经装了"
+    mvsix="$(ls "$prefix"/cyuneo-agent-monitor-*.vsix 2>/dev/null | head -1)"
+    have="$(code --list-extensions --show-versions 2>/dev/null | grep -i "^$monitor_id@" | cut -d@ -f2 || true)"
+    if [ -n "$mvsix" ]; then
+      want="$(basename "$mvsix" .vsix)"
+      want="${want#cyuneo-agent-monitor-}"
+      if [ -n "$have" ] && [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | tail -1)" = "$have" ]; then
+        echo "Agent Monitor $have 已经装了"
+      elif code --install-extension "$mvsix" --force >/dev/null 2>&1; then
+        echo "Agent Monitor $want 已装：重载窗口后生效"
+      else
+        echo "Agent Monitor 没装上：在 VS Code 连到这台机器的终端里运行  code --install-extension $mvsix"
+      fi
+    elif [ -n "$have" ]; then
+      echo "Agent Monitor $have 已经装了"
     elif code --install-extension "$monitor_id" >/dev/null 2>&1; then
       echo "Agent Monitor 已装（从扩展市场）"
     else

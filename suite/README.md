@@ -26,7 +26,7 @@ tar xzf cswap-suite.tar.gz
 | `cswap-remote/` | 手机网页：看会话、回答权限提示、切账号 |
 | `api-worker/` | Claude Code 插件：把任务交给用 Console API key 计费的后台 worker |
 | `cswap-status-*.vsix` | VS Code 插件：左侧 cswap 侧栏（账号用量圆环、主账号、自动切换阈值、API Worker） |
-| Agent Monitor | 不在压缩包里：`install.sh` 从 VS Code 扩展市场装 `cyuneo.cyuneo-agent-monitor`，看所有 Claude Code / Codex 会话、上下文和用量（`--no-monitor` 不装） |
+| Agent Monitor | `cyuneo-agent-monitor-*.vsix`，从 `agent-monitor/`（它自己的 git 仓库）打包：看所有 Claude Code / Codex 会话、上下文和用量，额度用完、cswap 换号后自动续跑。已装的版本更新时不动它；包里没有时从 VS Code 扩展市场装（`--no-monitor` 不装） |
 | `systemd/` | 后台服务的配置（`--auto`、`--remote` 时装） |
 
 ## 加账号

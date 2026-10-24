@@ -98,6 +98,14 @@ def main():
         shutil.copy2(cswap_dir / "LICENSE", top / "cswap" / "LICENSE")
         # the VS Code extension, built from its current sources
         run(sys.executable, str(ROOT / "cswap-status-vscode" / "build-vsix.py"), "--out", str(top))
+        # Agent Monitor, from its own repository next to the others (skipped if it isn't there:
+        # install.sh then takes it from the Marketplace)
+        monitor = ROOT / "agent-monitor"
+        if (monitor / "scripts" / "build-vsix.py").is_file():
+            run(sys.executable, str(monitor / "scripts" / "build-vsix.py"), "--out", str(top))
+            mpkg = json.loads((monitor / "package.json").read_text(encoding="utf-8"))
+            mdirty = "+未提交的改动" if run("git", "status", "--porcelain", cwd=monitor) else ""
+            info.append(f"agent-monitor {mpkg['version']} ({run('git', 'rev-parse', '--short', 'HEAD', cwd=monitor)}{mdirty})")
         for name in TOOLS:
             shutil.copytree(ROOT / name, top / name, ignore=ignore)
         shutil.copy2(SUITE / "install.sh", top / "install.sh")

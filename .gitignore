@@ -1,5 +1,7 @@
 # claude-swap keeps its own git history (branch chenyu-account-policy)
 /claude-swap/
+# Agent Monitor keeps its own git history (github.com/cyuneo/cyuneo-agent-monitor)
+/agent-monitor/
 # build output: rebuild with python3 suite/build.py
 /dist/
 *.vsix

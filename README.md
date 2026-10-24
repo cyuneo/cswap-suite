@@ -8,7 +8,7 @@
 
 ```bash
 suite/test.sh                          # 全部测试（约 1 分钟）
-git add -A && git commit               # 本地 git，没有远程；claude-swap/ 有自己的仓库，另外提交
+git add -A && git commit               # 本地 git，没有远程；claude-swap/、agent-monitor/ 有自己的仓库，另外提交
 python3 suite/build.py --install       # 先跑测试，再打包，再装到这台机器（重启正在运行的服务）
 ```
 
@@ -20,6 +20,7 @@ VS Code 插件装好后要重载窗口；Claude Code 的 api-worker 插件要重
 | --- | --- | --- |
 | [claude-swap/](claude-swap/) | 我们自己维护的 cswap，源自 realiti4/claude-swap（MIT 许可）。分支 `chenyu-account-policy`，合并过原项目到 c896cdd，之后不再跟踪原项目（没有远程地址）。比原项目多了：个人上限 `cswap policy`、切换后钩子、自动切换状态文件、暂停 `cswap auto --pause/--resume` | 安装包里是它打成的 wheel，`install.sh` 用 `uv tool install` 安装。systemd 服务 `cswap-auto` |
 | [cswap-status-vscode/](cswap-status-vscode/) | VS Code 插件：左侧活动栏的 cswap 侧边栏（账号用量圆环 / 自动切换 / API Worker 三个面板）和状态栏。加账号、切换、设主账号、改上限和阈值、加 API key 都在侧边栏里做 | 安装包里带 vsix，`install.sh` 用 `code --install-extension` 安装 |
+| [agent-monitor/](agent-monitor/) | VS Code 插件 Agent Monitor（自己的 git 仓库，远程 github.com/cyuneo/cyuneo-agent-monitor，也在 VS Code 扩展市场上）：看所有 Claude Code / Codex 会话；额度用完时，cswap 一换号就自动续跑 | 安装包里带它打成的 vsix（`agent-monitor/scripts/build-vsix.py`），`install.sh` 装上；已装的版本更新就不动 |
 | [api-worker/](api-worker/) | Claude Code 插件：把任务交给用 Console API key 计费的后台 Agent SDK worker，或开云端会话 | `install.sh` 装 Python 环境和 `api-worker` 命令，并把插件注册到安装好的副本 |
 | [cswap-hooks/](cswap-hooks/) | 每次切换后运行的钩子：统一推理强度（pin-effort）并记日志 | `~/.local/bin/cswap-on-switch` 链接到 `on-switch.sh`，cswap 设置 `autoswitch.onSwitchCommand` 指向它 |
 | [cswap-remote/](cswap-remote/) | 手机网页：看会话、回答权限提示、切账号 | systemd 服务 `cswap-remote`（`~/.local/bin/cswap-remote serve --host tailscale`） |

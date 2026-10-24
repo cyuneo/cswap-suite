@@ -35,8 +35,13 @@ part api-worker api-worker python3 -I -m unittest discover -s tests -q
 part hooks cswap-hooks python3 -I -m unittest discover -s tests -q
 part satellite cswap-satellite python3 -I -m unittest discover -s tests -q
 part remote cswap-remote python3 -I -m unittest discover -s tests -q
+monitor_tests() { # its fake CLIs start with #!/usr/bin/env node
+  PATH="$(dirname "$node"):$PATH" "$node" test/run.js
+}
+
 if [ -n "$node" ]; then
   part vscode cswap-status-vscode vscode_tests
+  if [ -d "$root/agent-monitor" ]; then part monitor agent-monitor monitor_tests; fi
 else
   skipped+=("vscode (no node)")
 fi
