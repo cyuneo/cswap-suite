@@ -25,7 +25,7 @@ VS Code 插件装好后要重载窗口；Claude Code 的 api-worker 插件要重
 | [cswap-remote/](cswap-remote/) | 手机网页：看会话、回答权限提示、切账号 | systemd 服务 `cswap-remote`（`~/.local/bin/cswap-remote serve --host tailscale`） |
 | [cswap-satellite/](cswap-satellite/) | 在别的电脑上用 setup-token 使用这些账号，并同步用量 | `~/.local/bin/cswap-satellite`；只在那些电脑上开定时器 `cswap-satellite-usage.timer`（这台是服务器，已关闭） |
 | [suite/](suite/) | 全套安装包：`install.sh`（一键安装）、`test.sh`（全部测试）、`build.py`（打包）、说明、后台服务配置 | `python3 suite/build.py [--install]` 生成 `dist/cswap-suite.tar.gz` |
-| [dist/](dist/) | `cswap-suite.tar.gz`（全套安装包）和当前的 vsix；`archive/` 放旧版本。不进 git | 见上一行 |
+| [dist/](dist/) | `cswap-suite.tar.gz`（全套安装包，VS Code 插件的 vsix 在里面）；`archive/` 放旧版本。不进 git | 见上一行 |
 | [xray/](xray/) | 和 cswap 无关的代理配置脚本，不进 git | 见它自己的 README |
 
 ## 新机器
