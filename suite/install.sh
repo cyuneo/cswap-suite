@@ -126,6 +126,9 @@ if [ "$vscode" = 1 ]; then
     else
       echo "Agent Monitor 没装上（要能连到 VS Code 扩展市场）：code --install-extension $monitor_id"
     fi
+  elif [ "$monitor" = 1 ]; then
+    mvsix="$(ls "$prefix"/cyuneo-agent-monitor-*.vsix 2>/dev/null | head -1)"
+    echo "Agent Monitor：在 VS Code 连到这台机器的终端里运行  code --install-extension ${mvsix:-$monitor_id}"
   fi
 fi
 
