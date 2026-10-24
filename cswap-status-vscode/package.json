@@ -2,7 +2,7 @@
   "name": "cswap-status",
   "displayName": "cswap Status",
   "description": "cswap 侧栏（活动栏图标）：当前机器、每个 claude-swap 账号的 5 小时/7 天用量圆环和一键切换、主账号、cswap 自动切换在做什么（阈值、当前结论、下一个账号、切换记录、暂停/恢复）、api-worker 每个 Console API key 的本月花费和任务；精简的状态栏条目；为所有账号保持 Claude Code 的 Dynamic workflows（Ultracode）开启；在 tmux 里启动 Claude 方便手机操作（cswap-remote）。",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "publisher": "chenyu",
   "license": "MIT",
   "engines": {
