@@ -9,11 +9,12 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 用法：./install.sh [选项]
-  （不加选项）     装 cswap（我们的版本）、切换钩子、cswap-satellite、cswap-remote、api-worker、VS Code 插件
+  （不加选项）     装 cswap（我们的版本）、切换钩子、cswap-satellite、cswap-remote、api-worker、VS Code 插件、Agent Monitor
   --auto           另外把自动切换（cswap auto）装成后台服务，一直运行
   --remote         另外把手机页面（cswap-remote）装成后台服务（需要 tmux 和 Tailscale）
   --no-api-worker  不装 api-worker
-  --no-vscode      不装 VS Code 插件
+  --no-vscode      不装 VS Code 插件（cswap 侧栏和 Agent Monitor 都不装）
+  --no-monitor     不装 Agent Monitor（从 VS Code 扩展市场装，看所有 Claude/Codex 会话）
 再运行一次就是更新。
 EOF
 }
@@ -21,13 +22,14 @@ EOF
 here="$(cd "$(dirname "$0")" && pwd)"
 prefix="${XDG_DATA_HOME:-$HOME/.local/share}/cswap-suite"
 bin="$HOME/.local/bin"
-auto=0 remote=0 api=1 vscode=1
+auto=0 remote=0 api=1 vscode=1 monitor=1
 for a in "$@"; do
   case "$a" in
     --auto) auto=1 ;;
     --remote) remote=1 ;;
     --no-api-worker) api=0 ;;
     --no-vscode) vscode=0 ;;
+    --no-monitor) monitor=0 ;;
     -h | --help) usage; exit 0 ;;
     *) echo "不认识的选项：$a" >&2; usage >&2; exit 2 ;;
   esac
@@ -99,6 +101,17 @@ if [ "$vscode" = 1 ]; then
     echo "VS Code 插件已装：重载窗口（Developer: Reload Window）后左侧出现 cswap 图标"
   else
     echo "VS Code 插件：在 VS Code 连到这台机器的终端里运行  code --install-extension $vsix"
+  fi
+  # Agent Monitor comes from the Marketplace, so it keeps its own updates.
+  monitor_id=cyuneo.cyuneo-agent-monitor
+  if [ "$monitor" = 1 ] && command -v code >/dev/null; then
+    if code --list-extensions 2>/dev/null | grep -qix "$monitor_id"; then
+      echo "Agent Monitor 已经装了"
+    elif code --install-extension "$monitor_id" >/dev/null 2>&1; then
+      echo "Agent Monitor 已装（从扩展市场）"
+    else
+      echo "Agent Monitor 没装上（要能连到 VS Code 扩展市场）：code --install-extension $monitor_id"
+    fi
   fi
 fi
 

@@ -13,7 +13,7 @@ tar xzf cswap-suite.tar.gz
 
 - 装到 `~/.local/share/cswap-suite`，命令在 `~/.local/bin`。解压出来的文件夹装完可以删掉。
 - 更新：拿新的压缩包再装一次，或者运行 `~/.local/share/cswap-suite/install.sh`。正在运行的后台服务会自动重启到新版本。
-- `./install.sh --help` 看全部选项（`--remote`、`--no-api-worker`、`--no-vscode`）。
+- `./install.sh --help` 看全部选项（`--remote`、`--no-api-worker`、`--no-vscode`、`--no-monitor`）。
 - 后台服务要在没登录时也运行，运行一次 `loginctl enable-linger`。
 
 ## 里面有什么
@@ -26,6 +26,7 @@ tar xzf cswap-suite.tar.gz
 | `cswap-remote/` | 手机网页：看会话、回答权限提示、切账号 |
 | `api-worker/` | Claude Code 插件：把任务交给用 Console API key 计费的后台 worker |
 | `cswap-status-*.vsix` | VS Code 插件：左侧 cswap 侧栏（账号用量圆环、主账号、自动切换阈值、API Worker） |
+| Agent Monitor | 不在压缩包里：`install.sh` 从 VS Code 扩展市场装 `cyuneo.cyuneo-agent-monitor`，看所有 Claude Code / Codex 会话、上下文和用量（`--no-monitor` 不装） |
 | `systemd/` | 后台服务的配置（`--auto`、`--remote` 时装） |
 
 ## 加账号
