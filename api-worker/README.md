@@ -62,9 +62,12 @@ api-worker start -p "任务内容" --budget 3 --allow-bash
 api-worker list                 # JSON：任务、每个 key 的花费、cswap 账号
 api-worker list --no-accounts   # 不运行 cswap，只要任务和花费（适合定时刷新）
 api-worker spend
+api-worker close <id>          # 把做完的云端任务标记为已结束
 ```
 
-`list` 里每个任务都有 `state` 和 `final`。`final` 为 true 表示任务已经结束（done、failed、cancelled、lost），之后不会再有变化，界面和提示直接看它，不用自己维护状态列表。`list` 每次最多花 15 秒去查云端任务的结果分支，没查到的下次接着查。
+`list` 里每个任务都有 `state` 和 `final`。`final` 为 true 表示任务已经结束（done、failed、cancelled、lost、closed），之后不会再有变化，界面和提示直接看它，不用自己维护状态列表。`list` 每次最多花 15 秒去查云端任务的结果分支，没查到的下次接着查。
+
+不在带远程的 git 仓库里开的云端任务没有结果分支，这里无法知道它什么时候做完，状态一直是 `cloud`（“已交给云端”）。到会话页面看完后，用 `api-worker close <id>`（或 cswap 侧栏里任务的右键“标记为已结束”）把它标记为 `closed`。
 
 ## 多个 API key
 

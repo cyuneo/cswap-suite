@@ -677,6 +677,28 @@ class CloudTests(Base):
         self.assertEqual((lst["tasks"][0]["state"], lst["tasks"][0]["final"]), ("cloud", False))
         self.assertEqual(len(json.loads(self.cli("list").stdout)["accounts"]), 2)
 
+    def test_close_marks_an_untracked_cloud_task_ended(self):
+        self.ok_claude()
+        tid = json.loads(self.cli("cloud", "--cwd", str(self.work), input="x").stdout)["id"]
+        r = self.cli("cancel", tid)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn(f"close {tid}", r.stderr)
+        r = self.cli("close", tid)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        t = json.loads(self.cli("list", "--no-accounts").stdout)["tasks"][0]
+        self.assertEqual((t["state"], t["final"]), ("closed", True))
+        self.assertIn("sessionUrl", t["note"])
+        self.assertTrue(t["endedAt"])
+        r = self.cli("close", tid)  # already ended
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_close_refuses_api_tasks(self):
+        tid = "t00000aa1"
+        api_worker.write_json(api_worker.tasks_dir() / tid / "task.json", {"id": tid, "kind": "api"})
+        r = self.cli("close", tid)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("cancel", r.stderr)
+
     def desk(self):
         bare = Path(self.tmp.name) / "desk.git"
         self.git("init", "-q", "--bare", str(bare))

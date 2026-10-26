@@ -186,9 +186,10 @@ def task_path(tid):
 
 
 # States in which a task has ended (`list` reports them as "final": true). A
-# "cloud" task without a result branch stays "cloud", not final; a "lost"
-# cloud launch still turns "done" if its result branch shows up later.
-FINAL_STATES = frozenset(("done", "failed", "cancelled", "lost"))
+# "cloud" task without a result branch stays "cloud", not final, until the
+# user marks it ended (`close`, state "closed"); a "lost" cloud launch still
+# turns "done" if its result branch shows up later.
+FINAL_STATES = frozenset(("done", "failed", "cancelled", "lost", "closed"))
 
 
 def pid_alive(pid):
@@ -217,13 +218,15 @@ def task_info(p):
         state = s.get("state")
         if state == "launching" and not pid_alive(s.get("pid")):
             state = "lost"  # killed while starting (e.g. a timeout); the session may exist anyway
-        elif state not in ("launching", "done", "failed"):
+        elif state not in ("launching", "done", "failed", "closed"):
             state = "running" if t.get("resultBranch") else "cloud"
         note = None
         if state == "lost":
             note = "启动时被中断，没拿到会话链接；云端会话可能已经开了，到 claude.ai/code 查看"
         elif state == "cloud":
-            note = "不是带远程的 git 仓库，结果拉不回来，只能在 sessionUrl 查看"
+            note = "已交给云端，这里无法跟踪它是否做完；到 sessionUrl 查看，做完后可以标记为已结束（close）"
+        elif state == "closed":
+            note = "已手动标记为结束；云端的实际结果在 sessionUrl"
         return {"id": p.name, "kind": "cloud", "title": t.get("title"), "state": state,
                 "final": state in FINAL_STATES,
                 "cwd": t.get("cwd"), "account": t.get("account"), "sessionUrl": t.get("sessionUrl"),
@@ -522,7 +525,8 @@ def cmd_result(a):
 def cmd_cancel(a):
     p = task_path(a.id)
     if read_json(p / "task.json").get("kind") == "cloud":
-        raise Fail("云端会话要在它的页面上停止：" + str(read_json(p / "task.json").get("sessionUrl")))
+        raise Fail("云端会话要在它的页面上停止：" + str(read_json(p / "task.json").get("sessionUrl")) +
+                   f"；停了以后可以用 close {a.id} 把它标记为已结束")
     st = read_json(p / "status.json")
     pid = st.get("pid")
     if st.get("state") not in ("queued", "running") or not pid_alive(pid):
@@ -534,6 +538,24 @@ def cmd_cancel(a):
     st.update(state="cancelled", endedAt=time.time(), updatedAt=time.time())
     write_json(p / "status.json", st)
     print(json.dumps({"id": a.id, "state": "cancelled"}))
+    return 0
+
+
+def cmd_close(a):
+    """Mark a cloud task as ended by hand: the session runs on claude.ai, and
+    one without a result branch never reports back here."""
+    p = task_path(a.id)
+    if read_json(p / "task.json").get("kind") != "cloud":
+        raise Fail(f"任务 {a.id} 不是云端任务；API 任务用 cancel 停止。")
+    info = task_info(p)
+    if info["final"]:
+        raise Fail(f"任务 {a.id} 已经结束了（{info['state']}）。")
+    if info["state"] not in ("cloud", "running"):
+        raise Fail(f"任务 {a.id} 还在启动，等它拿到会话链接再标记。")
+    st = read_json(p / "status.json")
+    st.update(state="closed", endedAt=time.time(), updatedAt=time.time())
+    write_json(p / "status.json", st)
+    print(json.dumps({"id": a.id, "state": "closed"}))
     return 0
 
 
@@ -983,7 +1005,7 @@ def refresh_cloud(p=None, force=False, budget=None):
         if t.get("kind") != "cloud" or not t.get("resultBranch"):
             continue
         st = read_json(q / "status.json")
-        if st.get("state") in ("done", "failed"):
+        if st.get("state") in ("done", "failed", "closed"):
             continue
         if st.get("state") == "launching" and pid_alive(st.get("pid")):
             continue  # `cloud` is still starting it and owns status.json
@@ -1152,7 +1174,7 @@ def main(argv=None):
     p.add_argument("--no-accounts", dest="accounts", action="store_false",
                    help="不列 cswap 账号（不运行 cswap）")
     p.set_defaults(fn=cmd_list)
-    for name, fn in (("status", cmd_status), ("result", cmd_result), ("cancel", cmd_cancel)):
+    for name, fn in (("status", cmd_status), ("result", cmd_result), ("cancel", cmd_cancel), ("close", cmd_close)):
         p = sub.add_parser(name)
         p.add_argument("id")
         if name == "status":
