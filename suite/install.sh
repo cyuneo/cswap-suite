@@ -15,6 +15,7 @@ usage() {
   --no-api-worker  不装 api-worker
   --no-vscode      不装 VS Code 插件（cswap 侧栏和 Agent Monitor 都不装）
   --no-monitor     不装 Agent Monitor（看所有 Claude/Codex 会话；用包里带的版本，扩展市场上更新时也会更新）
+  --force-vscode   VS Code 插件一律装包里的版本（默认已装的版本不比包里旧就不动）
 再运行一次就是更新。
 EOF
 }
@@ -22,7 +23,7 @@ EOF
 here="$(cd "$(dirname "$0")" && pwd)"
 prefix="${XDG_DATA_HOME:-$HOME/.local/share}/cswap-suite"
 bin="$HOME/.local/bin"
-auto=0 remote=0 api=1 vscode=1 monitor=1
+force_vscode=0 auto=0 remote=0 api=1 vscode=1 monitor=1
 for a in "$@"; do
   case "$a" in
     --auto) auto=1 ;;
@@ -30,6 +31,7 @@ for a in "$@"; do
     --no-api-worker) api=0 ;;
     --no-vscode) vscode=0 ;;
     --no-monitor) monitor=0 ;;
+    --force-vscode) force_vscode=1 ;;
     -h | --help) usage; exit 0 ;;
     *) echo "不认识的选项：$a" >&2; usage >&2; exit 2 ;;
   esac
@@ -70,16 +72,41 @@ prune "$prefix"/cswap/claude_swap-*.whl
 prune "$prefix"/cswap-status-*.vsix
 prune "$prefix"/cyuneo-agent-monitor-*.vsix
 
+# VS Code's command line: `code` from a terminal inside VS Code; otherwise
+# (ssh, or a terminal whose VS Code window is gone) the newest VS Code Server
+# on this machine, which installs into the same place. Empty: neither works.
+code_cli() {
+  if command -v code >/dev/null && code --list-extensions >/dev/null 2>&1; then
+    echo code
+    return
+  fi
+  local server
+  # shellcheck disable=SC2012 # names are hashes: newest by time
+  server="$(ls -dt "$HOME"/.vscode-server/cli/servers/Stable-*/server/bin/code-server 2>/dev/null | head -1 || true)"
+  if [ -n "$server" ] && env -u VSCODE_IPC_HOOK_CLI "$server" --list-extensions >/dev/null 2>&1; then
+    echo "$server"
+  fi
+}
+vscode_cli="$(code_cli)"
+vscode_run() { if [ "$vscode_cli" = code ]; then code "$@"; else env -u VSCODE_IPC_HOOK_CLI "$vscode_cli" "$@"; fi; }
 # The version VS Code reports for an extension id, or nothing
-ext_version() { code --list-extensions --show-versions 2>/dev/null | grep -i "^$1@" | cut -d@ -f2 || true; }
+ext_version() { vscode_run --list-extensions --show-versions 2>/dev/null | grep -i "^$1@" | cut -d@ -f2 || true; }
 # Installs a vsix and checks VS Code now reports its version; prints why not
 install_vsix() { # file, id, version
   local out
-  if ! out="$(code --install-extension "$1" --force 2>&1)"; then
+  if ! out="$(vscode_run --install-extension "$1" --force 2>&1)"; then
     printf '%s\n' "$out" | tail -3 | sed 's/^/   /'
     return 1
   fi
   [ "$(ext_version "$2")" = "$3" ] || { echo "   装完 VS Code 报告的版本是 $(ext_version "$2")，不是 $3"; return 1; }
+}
+# True when VS Code already has this version or a newer one (so the bundle's
+# older copy must not replace it), unless --force-vscode
+have_newer() { # id, version
+  local have
+  [ "$force_vscode" = 0 ] || return 1
+  have="$(ext_version "$1")"
+  [ -n "$have" ] && [ "$(printf '%s\n%s\n' "$2" "$have" | sort -V | tail -1)" = "$have" ]
 }
 
 # cswap: replaces any earlier cswap, including the original claude-swap.
@@ -94,7 +121,9 @@ done
 echo "命令已装到 $bin：cswap、cswap-on-switch（每次切换后运行）、cswap-satellite、cswap-remote"
 
 if [ "$api" = 1 ]; then
-  "$prefix/api-worker/install.sh"
+  if ! "$prefix/api-worker/install.sh"; then
+    echo "api-worker 没装好（上面是原因），其他部分照常装；之后可以再运行 $prefix/install.sh"
+  fi
   if command -v claude >/dev/null; then
     # A folder marketplace is read in place, so it must be the installed copy,
     # not wherever an earlier install (or a source checkout) registered it.
@@ -113,8 +142,11 @@ for m in d if isinstance(d, list) else d.get("marketplaces", []):
     fi
     claude plugin marketplace add "$prefix/api-worker" >/dev/null 2>&1 ||
       claude plugin marketplace update api-worker >/dev/null 2>&1 || true
-    if claude plugin install api-worker@api-worker >/dev/null 2>&1 ||
-      claude plugin update api-worker@api-worker >/dev/null 2>&1; then
+    # Install when missing, then always update: Claude Code keeps a copy per
+    # version, and build.py puts a hash of the files in the version, so this
+    # replaces the copy exactly when the files changed.
+    claude plugin install api-worker@api-worker >/dev/null 2>&1 || true
+    if claude plugin update api-worker@api-worker >/dev/null 2>&1; then
       echo "Claude Code 的 api-worker 插件已装（重开 Claude Code 生效）"
     else
       echo "api-worker 插件没装上，可以手动运行：claude plugin marketplace add $prefix/api-worker && claude plugin install api-worker@api-worker"
@@ -128,7 +160,9 @@ if [ "$vscode" = 1 ]; then
   vsix="$(newest "$prefix"/cswap-status-*.vsix)"
   vver="$(basename "$vsix" .vsix)"
   vver="${vver#cswap-status-}"
-  if command -v code >/dev/null && install_vsix "$vsix" chenyu.cswap-status "$vver"; then
+  if [ -n "$vscode_cli" ] && have_newer chenyu.cswap-status "$vver"; then
+    echo "VS Code 插件 $(ext_version chenyu.cswap-status) 已经装了（包里是 $vver）"
+  elif [ -n "$vscode_cli" ] && install_vsix "$vsix" chenyu.cswap-status "$vver"; then
     echo "VS Code 插件 $vver 已装：重载窗口（Developer: Reload Window）后生效"
   else
     echo "VS Code 插件：在 VS Code 连到这台机器的终端里运行  code --install-extension $vsix"
@@ -137,13 +171,13 @@ if [ "$vscode" = 1 ]; then
   # (a later Marketplace release still updates it as usual); no copy in the
   # bundle -> from the Marketplace.
   monitor_id=cyuneo.cyuneo-agent-monitor
-  if [ "$monitor" = 1 ] && command -v code >/dev/null; then
+  if [ "$monitor" = 1 ] && [ -n "$vscode_cli" ]; then
     mvsix="$(newest "$prefix"/cyuneo-agent-monitor-*.vsix)"
     have="$(ext_version "$monitor_id")"
     if [ -n "$mvsix" ]; then
       want="$(basename "$mvsix" .vsix)"
       want="${want#cyuneo-agent-monitor-}"
-      if [ -n "$have" ] && [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | tail -1)" = "$have" ]; then
+      if have_newer "$monitor_id" "$want"; then
         echo "Agent Monitor $have 已经装了"
       elif install_vsix "$mvsix" "$monitor_id" "$want"; then
         echo "Agent Monitor $want 已装：重载窗口后生效"
@@ -152,7 +186,7 @@ if [ "$vscode" = 1 ]; then
       fi
     elif [ -n "$have" ]; then
       echo "Agent Monitor $have 已经装了"
-    elif code --install-extension "$monitor_id" >/dev/null 2>&1; then
+    elif vscode_run --install-extension "$monitor_id" >/dev/null 2>&1; then
       echo "Agent Monitor 已装（从扩展市场）"
     else
       echo "Agent Monitor 没装上（要能连到 VS Code 扩展市场）：code --install-extension $monitor_id"
@@ -185,6 +219,12 @@ service() { # name, wanted, command to run by hand without systemd
   fi
 }
 service cswap-auto "$auto" "cswap auto"
+# An old crontab line running `cswap auto --once` next to the service is a
+# second engine: switches it makes come and go between the service's ticks.
+cron_engines="$(crontab -l 2>/dev/null | grep -v '^[[:space:]]*#' | grep -c 'cswap auto' || true)"
+if [ "${cron_engines:-0}" != 0 ]; then
+  echo "注意：crontab 里还有一行在运行 cswap auto（第二个自动切换）。运行 crontab -e 删掉它，自动切换只留后台服务 cswap-auto。"
+fi
 service cswap-remote "$remote" "cswap-remote serve --host tailscale"
 
 case ":$PATH:" in

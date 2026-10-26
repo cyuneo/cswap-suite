@@ -13,6 +13,7 @@ sources live on a drive where everything is 0777), and the build stops if a
 file looks like it holds a token.
 """
 
+import hashlib
 import json
 import re
 import shutil
@@ -55,6 +56,22 @@ def versions(cswap_dir, wheel):
         f"cswap-status {pkg['version']}",
         f"api-worker {worker.get('version', '?')}",
     ]
+
+
+def stamp_plugin_version(plugin_dir):
+    """Appends a hash of the plugin's files to its plugin.json version
+    (0.4.2 -> 0.4.2+1a2b3c4d). Claude Code caches an installed plugin per
+    version and `claude plugin update` refreshes it only when the version
+    changes, so changed files under an unchanged version would never reach it.
+    Returns the new version."""
+    manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    h = hashlib.sha256()
+    for f in sorted(p for p in plugin_dir.rglob("*") if p.is_file() and p != manifest):
+        h.update(f.relative_to(plugin_dir).as_posix().encode() + b"\0" + f.read_bytes() + b"\0")
+    data["version"] = f"{str(data.get('version', '0')).split('+')[0]}+{h.hexdigest()[:8]}"
+    manifest.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return data["version"]
 
 
 def check_secrets(top):
@@ -108,6 +125,7 @@ def main():
             info.append(f"agent-monitor {mpkg['version']} ({run('git', 'rev-parse', '--short', 'HEAD', cwd=monitor)}{mdirty})")
         for name in TOOLS:
             shutil.copytree(ROOT / name, top / name, ignore=ignore)
+        info = [f"api-worker {stamp_plugin_version(top / 'api-worker')}" if x.startswith("api-worker ") else x for x in info]
         shutil.copy2(SUITE / "install.sh", top / "install.sh")
         shutil.copy2(SUITE / "README.md", top / "README.md")
         shutil.copytree(SUITE / "systemd", top / "systemd")
