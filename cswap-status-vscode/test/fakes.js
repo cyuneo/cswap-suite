@@ -61,6 +61,8 @@ function hermetic(dir) {
   fs.symlinkSync(py, path.join(bin, "python3"));
   process.env.HOME = dir;
   process.env.PATH = bin;
+  // the switch-notice markers go to $XDG_STATE_HOME when it is set
+  delete process.env.XDG_STATE_HOME;
   return bin;
 }
 

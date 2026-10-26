@@ -107,11 +107,36 @@ function firstToNotice(key) {
         // another window removed it
       }
     }
+  } catch {
+    return true; // (a file where the folder should be, too)
+  }
+  try {
     fs.closeSync(fs.openSync(path.join(dir, key.replace(/[^\w.-]/g, "_")), "wx"));
     return true;
   } catch (e) {
     return !(e && e.code === "EEXIST");
   }
+}
+
+// A switch seen while this window is in the background waits until it gets
+// focus (for up to NOTE_WAIT_MS), so the notice lands in the window the user
+// looks at rather than whichever window happened to refresh first.
+const NOTE_WAIT_MS = 30 * 60e3;
+let waitingNotice = null; // {key, text, seenAt}
+function noticeSwitch(key, text) {
+  waitingNotice = null;
+  if (vscode.window.state && vscode.window.state.focused === false) {
+    waitingNotice = { key, text, seenAt: Date.now() };
+    return;
+  }
+  if (firstToNotice(key)) vscode.window.showInformationMessage(text);
+}
+
+function onWindowState(s) {
+  if (!s || !s.focused || !waitingNotice) return;
+  const w = waitingNotice;
+  waitingNotice = null;
+  if (Date.now() - w.seenAt < NOTE_WAIT_MS && firstToNotice(w.key)) vscode.window.showInformationMessage(w.text);
 }
 
 // Called after every accounts refresh with accounts.state.
@@ -131,7 +156,7 @@ async function update(acc) {
     if (state.seenSwitchAt !== undefined && at && at !== state.seenSwitchAt) {
       // the window that made a manual switch claims it too, so no other window repeats it
       if (own) firstToNotice(`switch-${at}`);
-      else if (cfg("notifyOnSwitch", true) && firstToNotice(`switch-${at}`)) vscode.window.showInformationMessage(notifyText(ls));
+      else if (cfg("notifyOnSwitch", true)) noticeSwitch(`switch-${at}`, notifyText(ls));
     }
     state.seenSwitchAt = at;
     // once per episode: from here on Claude itself reports its limit
@@ -309,13 +334,16 @@ const REASON_ICON = {
   error: ["warning", "charts.yellow"],
 };
 
+const OWN_DETAIL = new Set(["error", "active-usage-unknown"]);
+
 function decisionRow(svc, now) {
   const [icon, color] = svc.trigger ? ["zap", "charts.yellow"] : REASON_ICON[svc.reason] || ["info"];
   const blocked = color === "charts.red";
   const verdict = svc.trigger ? `切换（${f.triggerZh(svc.trigger)}）` : blocked ? "无法切换" : "不切换";
   // A translated reason stands for cswap's English detail (the numbers are on
-  // the rows below); the detail stays in the tooltip.
-  const known = svc.reason && f.reasonZh(svc.reason) !== svc.reason;
+  // the rows below); the detail stays in the tooltip. Not for an error or a
+  // failover count, which no row below shows.
+  const known = svc.reason && f.reasonZh(svc.reason) !== svc.reason && !OWN_DETAIL.has(svc.reason);
   const desc = [f.reasonZh(svc.reason), known ? "" : noEmail(svc.detail), svc.lastTickAt ? f.ago(svc.lastTickAt, now) : ""].filter(Boolean).join(" · ");
   return item(`当前 #${svc.active || "?"}：${verdict}`, icon, color, {
     description: desc,
@@ -626,4 +654,4 @@ async function setThreshold() {
   vscode.window.setStatusBarMessage(`$(check) ${own.map((r) => `#${r.number}`).join("、")} 改为跟随阈值 ${t.trim()}%`, 8000);
 }
 
-module.exports = { state, changed, update, serviceStatus, isPaused, statusMarker, AutoTree, pause, resume, setThreshold, minutesLeftToday, excludedZh };
+module.exports = { state, changed, update, onWindowState, serviceStatus, isPaused, statusMarker, AutoTree, pause, resume, setThreshold, minutesLeftToday, excludedZh };

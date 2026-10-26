@@ -118,6 +118,7 @@ function activate(context) {
     cmd("cswapStatus.apiKeyAdd", apiView.addKey),
     cmd("cswapStatus.apiKeyBudget", apiView.setKeyBudget),
     cmd("cswapStatus.apiKeyRemove", apiView.removeKey),
+    vscode.window.onDidChangeWindowState(autoswitch.onWindowState),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration("cswapStatus")) return;
       if (e.affectsConfiguration("cswapStatus.accountsStyle")) accountsMode.apply();

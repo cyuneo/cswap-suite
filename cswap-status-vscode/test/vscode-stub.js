@@ -12,6 +12,12 @@ const shown = { info: [], warn: [], error: [], docs: [], status: [] };
 const answers = { input: [], pick: [], warn: [], info: [] };
 const executed = []; // [command, ...args]
 const contexts = {}; // setContext key -> value
+const windowStateListeners = [];
+// Focus or blur the (one) stub window.
+function setFocused(focused) {
+  vscode.window.state = { focused };
+  for (const fn of windowStateListeners) fn({ focused });
+}
 const terminals = [];
 const statusItems = [];
 const configUpdates = [];
@@ -95,6 +101,11 @@ const vscode = {
       statusItems.push(it);
       return it;
     },
+    state: { focused: true },
+    onDidChangeWindowState: (fn) => {
+      windowStateListeners.push(fn);
+      return { dispose() {} };
+    },
     showInformationMessage: async (m) => (shown.info.push(m), answers.info.shift()),
     showWarningMessage: async (m) => (shown.warn.push(m), answers.warn.shift()),
     showErrorMessage: async (m) => (shown.error.push(m), undefined),
@@ -171,4 +182,4 @@ function fakeWebviewView() {
   };
 }
 
-module.exports = { vscode, config, shown, answers, executed, contexts, terminals, statusItems, configUpdates, webviews, fakeWebviewView, sleep, closeTerminal };
+module.exports = { vscode, setFocused, config, shown, answers, executed, contexts, terminals, statusItems, configUpdates, webviews, fakeWebviewView, sleep, closeTerminal };

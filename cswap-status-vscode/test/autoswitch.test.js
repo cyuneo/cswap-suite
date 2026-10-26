@@ -128,6 +128,24 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   setPolicy(ROWS, block({ lastSwitch: { at: otherAt, from: "1", to: "3", trigger: "reserve-return", auto: true } }));
   await T.refresh();
   assert.strictEqual(shown.info.length, 1);
+  // a window in the background waits for focus, then says it (once)
+  stub.setFocused(false);
+  setPolicy(ROWS, block({ lastSwitch: { at: now() - 2, from: "3", to: "1", trigger: "proactive", auto: true } }));
+  await T.refresh();
+  assert.strictEqual(shown.info.length, 1);
+  stub.setFocused(true);
+  assert.strictEqual(shown.info.pop(), "cswap 自动切换 #3 → #1（提前切换）");
+  stub.setFocused(false);
+  stub.setFocused(true);
+  assert.strictEqual(shown.info.length, 1);
+  // ...unless another window claimed it meanwhile
+  stub.setFocused(false);
+  const claimedAt = now() - 1.5;
+  setPolicy(ROWS, block({ lastSwitch: { at: claimedAt, from: "1", to: "3", trigger: "reserve-return", auto: true } }));
+  await T.refresh();
+  require("fs").writeFileSync(path.join(noticed, `switch-${claimedAt}`.replace(/[^\w.-]/g, "_")), "");
+  stub.setFocused(true);
+  assert.strictEqual(shown.info.length, 1);
   stub.config.notifyOnSwitch = false;
   setPolicy(ROWS, block({ lastSwitch: { at: now() - 1, from: "1", to: "3", trigger: "reserve-return", auto: true } }));
   await T.refresh();
@@ -311,6 +329,23 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   setPolicy(ROWS, block({ manualHoldUntil: now() - 5 }));
   await T.refresh();
   assert.ok(!find("手动切换"), "an ended hold has no row");
+  // an error or a failover count keeps its detail: no row below shows it
+  const failing = block();
+  failing.service = { ...failing.service, reason: "active-usage-unknown", detail: "2/3 before failover" };
+  setPolicy(ROWS, failing);
+  await T.refresh();
+  assert.match(find("当前").description, /^当前账号用量未知 · 2\/3 before failover · /);
+
+  // a file where the marker folder should be: every window says the switch
+  const fs = require("fs");
+  fs.rmSync(noticed, { recursive: true, force: true });
+  fs.writeFileSync(noticed, "");
+  stub.config.notifyOnSwitch = true;
+  const before = shown.info.length;
+  setPolicy(ROWS, block({ lastSwitch: { at: now() - 0.5, from: "3", to: "1", trigger: "proactive", auto: true } }));
+  await T.refresh();
+  assert.strictEqual(shown.info.length, before + 1);
+  fs.rmSync(noticed);
 
   console.log("autoswitch tests: OK");
   // excluded reasons exactly as cswap writes them come out in Chinese
