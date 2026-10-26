@@ -90,6 +90,30 @@ function earliestBack(rows, now) {
   return best;
 }
 
+// Every VS Code window (and both machines' windows on this server) sees the
+// same switch: the first to create a marker file for it says so, the others
+// stay quiet. No folder to write to: every window says so, as before.
+const NOTE_KEEP_MS = 2 * 86400e3;
+function firstToNotice(key) {
+  const fs = require("fs");
+  const path = require("path");
+  const dir = path.join(process.env.XDG_STATE_HOME || path.join(require("os").homedir(), ".local", "state"), "cswap-status", "noticed");
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of fs.readdirSync(dir)) {
+      try {
+        if (Date.now() - fs.statSync(path.join(dir, name)).mtimeMs > NOTE_KEEP_MS) fs.unlinkSync(path.join(dir, name));
+      } catch {
+        // another window removed it
+      }
+    }
+    fs.closeSync(fs.openSync(path.join(dir, key.replace(/[^\w.-]/g, "_")), "wx"));
+    return true;
+  } catch (e) {
+    return !(e && e.code === "EEXIST");
+  }
+}
+
 // Called after every accounts refresh with accounts.state.
 async function update(acc) {
   const data = acc.data;
@@ -104,8 +128,10 @@ async function update(acc) {
     const at = ls && ls.at ? ls.at : null;
     // a manual switch made from this window already said so in the status bar
     const own = ls && (ls.auto === false || ls.trigger === "manual") && Date.now() - runtime.ownSwitchAt < 60000;
-    if (state.seenSwitchAt !== undefined && at && at !== state.seenSwitchAt && cfg("notifyOnSwitch", true) && !own) {
-      vscode.window.showInformationMessage(notifyText(ls));
+    if (state.seenSwitchAt !== undefined && at && at !== state.seenSwitchAt) {
+      // the window that made a manual switch claims it too, so no other window repeats it
+      if (own) firstToNotice(`switch-${at}`);
+      else if (cfg("notifyOnSwitch", true) && firstToNotice(`switch-${at}`)) vscode.window.showInformationMessage(notifyText(ls));
     }
     state.seenSwitchAt = at;
     // once per episode: from here on Claude itself reports its limit

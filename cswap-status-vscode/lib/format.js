@@ -63,6 +63,24 @@ function nearLimit(r) {
   return near(r.usage5h, r.max5h) || near(r.usage7d, r.max7d);
 }
 
+// The status bar's short form: the window closest to its line ("5h 34/40%";
+// the line after the slash only when it is the account's own, the shared
+// threshold being the same for every account). 5h when neither is known.
+function compactUsage(r) {
+  const wins = [
+    ["5h", r.usage5h, r.max5h, r.max5hSource],
+    ["7d", r.usage7d, r.max7d, r.max7dSource],
+  ];
+  const known = (u, m) => u !== null && u !== undefined && m !== null && m !== undefined;
+  let pick = wins[0];
+  for (const w of wins) {
+    if (!known(w[1], w[2])) continue;
+    if (!known(pick[1], pick[2]) || Number(w[2]) - Number(w[1]) < Number(pick[2]) - Number(pick[1])) pick = w;
+  }
+  const [label, used, max, source] = pick;
+  return `${label} ${pct(used)}${source === "own" && max !== null && max !== undefined ? `/${pct(max)}` : ""}%`;
+}
+
 const STATE_ZH = {
   active: "当前",
   ready: "可用",
@@ -255,6 +273,7 @@ module.exports = {
   isWarn,
   nearLimit,
   NEAR_MARGIN,
+  compactUsage,
   shortSpan,
   statusZh,
   accountDetail,

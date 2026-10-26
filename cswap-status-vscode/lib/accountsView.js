@@ -36,7 +36,7 @@ function render() {
   if (!rows.length) account = "未添加账号";
   else if (!active) account = compact ? "未管理" : "当前登录未被 cswap 管理";
   else {
-    account = compact ? `#${active.number} 5h ${f.pct(active.usage5h)}%` : `${active.name} ${f.usageText(active)}`;
+    account = compact ? `#${active.number} ${f.compactUsage(active)}` : `${active.name} ${f.usageText(active)}`;
     if (f.isWarn(active)) {
       if (!compact) account += ` ${f.statusZh(active)}`;
       warn = true;

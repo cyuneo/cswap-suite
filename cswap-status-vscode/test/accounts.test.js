@@ -172,6 +172,13 @@ const menu = (c) =>
 
   // compact status bar
   assert.strictEqual(item.text, "$(account) #3 5h 34%");
+  // the window closest to its line; the line itself only when it is the account's own
+  const cu = require("../lib/format").compactUsage;
+  assert.strictEqual(cu({ usage5h: 34, max5h: 40, max5hSource: "own", usage7d: 82, max7d: 95, max7dSource: "own" }), "5h 34/40%");
+  assert.strictEqual(cu({ usage5h: 10, max5h: 98, max5hSource: "threshold", usage7d: 90, max7d: 95, max7dSource: "own" }), "7d 90/95%");
+  assert.strictEqual(cu({ usage5h: 10, max5h: 98, max5hSource: "threshold", usage7d: 50, max7d: 98, max7dSource: "threshold" }), "7d 50%");
+  assert.strictEqual(cu({ usage5h: null, max5h: 98, usage7d: 50, max7d: 98 }), "7d 50%");
+  assert.strictEqual(cu({ usage5h: null, usage7d: null }), "5h ?%");
   assert.strictEqual(item.command, "cswapStatus.openPanel");
   assert.match(item.tooltip.value, /\| ▶ 3: c@x \| 34\/98% \| 20\/98% \| 当前 \|/);
   assert.match(item.tooltip.value, /\| 6: f@x \| 10\/98% \| 10\/98% \| 到上限（opus） \|/);
@@ -255,8 +262,17 @@ const menu = (c) =>
   // the shared threshold is on the row above; only an account's own line after the slash
   const own = L.accountItem({ number: "9", name: "z@x", usage5h: 27, max5h: 40, max5hSource: "own", usage7d: 80, max7d: 98, max7dSource: "threshold" }, 0, []);
   assert.strictEqual(own.description, "5h 27/40% · 7d 80%");
-  assert.strictEqual(byNum["3"].description, "5h 99/98% · 7d 20/98% · 当前 · 到上限");
-  assert.strictEqual(byNum["5"].description, "5h 60/70% · 7d 10/98% · 不在时段");
+  // tags first (a narrow side bar cuts the end)
+  assert.strictEqual(byNum["3"].description, "当前 · 到上限 · 5h 99/98% · 7d 20/98%");
+  assert.strictEqual(byNum["5"].description, "不在时段 · 5h 60/70% · 7d 10/98%");
+  // the tooltip has when each window resets, and the card's notes
+  const tipRow = L.accountItem(
+    { number: "9", name: "z@x", usage5h: 34, max5h: 40, usage7d: 82, max7d: 95, resetsAt5h: 1000 + 7200, resetsAt7d: 900,
+      usageAgeSeconds: 7200, quarantined: "invalid_grant" }, 1000, []);
+  assert.match(tipRow.tooltip, /^5h 34 \/ 40% · 2 小时后重置（\d\d:\d\d）$/m);
+  assert.match(tipRow.tooltip, /^7d 82 \/ 95%$/m, "a reset already past is left out");
+  assert.match(tipRow.tooltip, /用量是 2 小时前的/);
+  assert.match(tipRow.tooltip, /自动切换已隔离：invalid_grant/);
   // no icon folder: theme icons; with one: a light and a dark ring picture
   assert.strictEqual(byNum["2"].iconPath.id, "circle-slash");
   const iconDir = path.join(tmp, "icons");

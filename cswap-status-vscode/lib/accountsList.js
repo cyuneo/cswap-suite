@@ -65,19 +65,30 @@ function accountItem(r, now, rows) {
     if (back) tags.push(back);
   } else if (!["active", "ready", "reserve"].includes(st)) tags.push(f.statusZh(r));
   if (r.lastError) tags.push("读取用量失败");
-  it.description = [windowText("5h", r.usage5h, r.max5h, r.max5hSource), windowText("7d", r.usage7d, r.max7d, r.max7dSource), ...tags].join(" · ");
+  // tags first: a narrow side bar cuts the end of the line
+  it.description = [...tags, windowText("5h", r.usage5h, r.max5h, r.max5hSource), windowText("7d", r.usage7d, r.max7d, r.max7dSource)].join(" · ");
   const files = ringIcon.iconFiles(iconDir, r, !cardContext(r).cswapOn);
   if (files) it.iconPath = { light: vscode.Uri.file(files.light), dark: vscode.Uri.file(files.dark) };
   else
     it.iconPath = new vscode.ThemeIcon(
       r.lastError || r.quarantined ? "warning" : st === "limit" ? "error" : st === "disabled" ? "circle-slash" : r.active ? "pass-filled" : "account"
     );
+  const resetLine = (label, used, max, reset) => {
+    let line = `${label} ${f.pct(used)}${max === null || max === undefined ? "" : ` / ${f.pct(max)}`}%`;
+    if (typeof reset === "number" && reset > now) line += ` · ${f.span(reset - now)}后重置（${f.clock(reset)}）`;
+    return line;
+  };
   it.tooltip = [
     name,
     r.email && r.email !== name && r.email,
     f.accountDetail(r),
     r.reason,
+    resetLine("5h", r.usage5h, r.max5h, r.resetsAt5h),
+    resetLine("7d", r.usage7d, r.max7d, r.resetsAt7d),
     r.lastError && `读取用量失败（${r.lastError}）`,
+    // the same notes as the card
+    (r.usageAgeSeconds > 3600 || (r.lastError && r.usageAgeSeconds > 0)) && `用量是 ${f.span(r.usageAgeSeconds)}前的`,
+    r.quarantined && `自动切换已隔离：${r.quarantined}`,
     "图标：外圈 5 小时，内圈 7 天；接近这个账号的切换线变黄，到线变红",
   ]
     .filter(Boolean)
