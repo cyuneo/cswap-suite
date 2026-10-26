@@ -143,6 +143,7 @@ api-worker remove-key gmail
 | 每月上限 | $200 | 已花的加上进行中任务的预算，超过就拒绝新任务：`config --set monthlyBudgetUsd=…` |
 | 同时运行的任务 | 3 个 | `config --set maxParallel=…` |
 | 默认模型 | claude-sonnet-5-5 | `config --set model=…` |
+| 开关 | 打开 | `config --set enabled=false` 关掉后不接新任务（dispatch 和 cloud 都拒绝，Claude Code 里的工具也一样），正在跑的任务会跑完；VS Code cswap 侧栏的 API Worker 标题栏有同一个开关 |
 
 - **不碰订阅登录**：工作进程有自己的 `CLAUDE_CONFIG_DIR`，启动前清掉所有 Claude 登录相关的环境变量，只给它 API key。
 - **key 不外露**：key 不会写进任务文件或日志，出错信息里也会替换成 `[key]`。

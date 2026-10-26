@@ -108,6 +108,8 @@ function activate(context) {
     cmd("cswapStatus.showApi", apiView.showApi),
     cmd("cswapStatus.apiRefresh", refreshApi),
     cmd("cswapStatus.apiDispatch", apiView.dispatchTask),
+    cmd("cswapStatus.apiTurnOff", () => apiView.setWorkerEnabled(false)),
+    cmd("cswapStatus.apiTurnOn", () => apiView.setWorkerEnabled(true)),
     cmd("cswapStatus.apiOpenResult", apiView.openTaskResult),
     cmd("cswapStatus.apiCancel", apiView.cancelTask),
     cmd("cswapStatus.apiClose", apiView.closeTask),

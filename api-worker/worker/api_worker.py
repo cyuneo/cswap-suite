@@ -38,7 +38,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 # Console API keys: sk-ant-api03-... and the newer sk-ant-usr... form.
 KEY_RE = re.compile(r"sk-ant-(?:api\d\d|usr[0-9a-z]*)-[A-Za-z0-9_\-]{20,}")
 DEFAULTS = {
@@ -53,6 +53,7 @@ DEFAULTS = {
     "keyBudgets": {},       # key name -> monthly cap in USD (default monthlyBudgetUsd)
     "deskRepo": "",         # private git repo (URL) cloud tasks use when their folder has none
     "deskMaxMb": 20.0,      # most one task may upload to the desk repo
+    "enabled": True,        # off: no new tasks (start / cloud); running ones go on
 }
 # Environment that could carry a Claude login into the worker.
 LOGIN_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
@@ -66,6 +67,12 @@ WEB_TOOLS = {"WebFetch", "WebSearch"}
 
 class Fail(Exception):
     pass
+
+
+def require_enabled(cfg):
+    if cfg.get("enabled") is False:
+        raise Fail("API worker 已关闭，不接新任务。打开：api-worker config --set enabled=true，"
+                   "或点 VS Code cswap 侧栏 API Worker 标题栏的开关。")
 
 
 # ------------------------------------------------------------ paths & config
@@ -299,6 +306,7 @@ def make_worktree(cwd, tid):
 
 def cmd_start(a):
     cfg = load_config()
+    require_enabled(cfg)
     prompt = a.prompt if a.prompt is not None else sys.stdin.read()
     prompt = (prompt or "").strip()
     if not prompt:
@@ -480,7 +488,8 @@ def cmd_list(a):
     refresh_cloud(budget=LIST_CLOUD_BUDGET)
     rows = all_tasks()[: a.limit]
     spent, reserved = month_spend()
-    out = {"tasks": rows, "monthSpentUsd": spent, "monthReservedUsd": reserved, "keys": key_rows(cfg)}
+    out = {"tasks": rows, "monthSpentUsd": spent, "monthReservedUsd": reserved, "keys": key_rows(cfg),
+           "enabled": cfg["enabled"] is not False}
     if a.accounts:
         out["accounts"] = cswap_accounts()
     print(json.dumps(out, ensure_ascii=False))
@@ -920,6 +929,7 @@ def cmd_cloud_start(a):
     if not os.path.isdir(cwd):
         raise Fail(f"目录不存在：{cwd}")
     cfg = load_config()
+    require_enabled(cfg)
     tid = "t" + uuid.uuid4().hex[:8]
     top = git(cwd, "rev-parse", "--show-toplevel")
     remote = git(cwd, "remote").stdout.split()
@@ -1135,7 +1145,12 @@ def cmd_config(a):
         if k not in DEFAULTS or isinstance(DEFAULTS[k], dict):
             raise Fail("可以设置：" + ", ".join(DEFAULTS))
         cur = DEFAULTS[k]
-        val = float(v) if isinstance(cur, float) else int(v) if isinstance(cur, int) else v
+        if isinstance(cur, bool):
+            if v.strip().lower() not in ("true", "false", "on", "off", "1", "0"):
+                raise Fail(f"{k} 只能是 true 或 false。")
+            val = v.strip().lower() in ("true", "on", "1")
+        else:
+            val = float(v) if isinstance(cur, float) else int(v) if isinstance(cur, int) else v
         save_config(**{k: val})
         cfg[k] = val
     print(json.dumps(cfg, ensure_ascii=False, indent=2))

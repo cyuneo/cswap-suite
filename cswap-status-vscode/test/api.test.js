@@ -190,6 +190,32 @@ const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((
   await T.refreshApi();
   assert.notStrictEqual(new T.ApiTree().getChildren()[0].label.slice(0, 4), "刷新失败");
 
+  // the worker's on/off switch: the title bar button flips `config --set enabled=`
+  assert.strictEqual(stub.contexts["cswapStatus.apiSwitch"], "", "a worker without the switch shows no button");
+  worker.set({ list: { out: { ...LIST, enabled: true } }, "config --set": { out: "{}" } });
+  await T.refreshApi();
+  assert.strictEqual(stub.contexts["cswapStatus.apiSwitch"], "on");
+  assert.notStrictEqual(new T.ApiTree().getChildren()[0].label, "已关闭：不接新任务");
+  worker.set({ list: { out: { ...LIST, enabled: false } }, "config --set": { out: "{}" } });
+  await T.apiView.setWorkerEnabled(false);
+  assert.deepStrictEqual(worker.calls().filter((c) => c.argv[0] === "config").pop().argv, ["config", "--set", "enabled=false"]);
+  assert.strictEqual(stub.contexts["cswapStatus.apiSwitch"], "off");
+  assert.match(shown.info.pop(), /已关闭.*还有 2 个任务在跑/);
+  const offTop = new T.ApiTree().getChildren()[0];
+  assert.strictEqual(offTop.label, "已关闭：不接新任务");
+  assert.strictEqual(offTop.command.command, "cswapStatus.apiTurnOn");
+  assert.match(apiItem.tooltip.value, /API worker 已关闭/);
+  worker.set({ list: { out: { ...LIST, enabled: true } }, "config --set": { out: "{}" } });
+  await T.apiView.setWorkerEnabled(true);
+  assert.deepStrictEqual(worker.calls().filter((c) => c.argv[0] === "config").pop().argv, ["config", "--set", "enabled=true"]);
+  assert.strictEqual(stub.contexts["cswapStatus.apiSwitch"], "on");
+  // a failed switch says so and changes nothing
+  worker.set({ list: { out: { ...LIST, enabled: true } }, "config --set": { err: JSON.stringify({ error: "可以设置：model" }), code: 1 } });
+  await T.apiView.setWorkerEnabled(false);
+  assert.match(shown.error.pop(), /可以设置/);
+  worker.set({ list: { out: LIST } });
+  await T.refreshApi();
+
   // an older worker without --no-accounts: one retry without it, then never again
   worker.set({ list: { out: LIST, rejectFlag: "--no-accounts" } });
   const before = listCalls().length;

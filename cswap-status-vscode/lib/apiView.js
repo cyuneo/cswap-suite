@@ -46,16 +46,18 @@ function render() {
   const running = tasks.filter(isRunning);
   const left = keys.reduce((s, k) => s + (Number(k.leftUsd) || 0), 0);
   const low = keys.length && keys.every((k) => Number(k.leftUsd) < 0.1 * Number(k.monthlyBudgetUsd || 1));
-  const spin = running.length ? "sync~spin" : "cloud";
+  const off = api.switchState(data) === "off";
+  const spin = running.length ? "sync~spin" : off ? "circle-slash" : "cloud";
   item.text =
     barMode() === "compact"
       ? `$(${spin}) ${keys.length ? (left >= 10 ? `$${Math.floor(left)}` : money(left)) : "API"}${running.length ? ` ${running.length}` : ""}`
-      : `$(${spin}) API ${keys.length ? "剩 " + money(left) : "未设 key"}${running.length ? ` · ${running.length} 个运行中` : ""}`;
+      : `$(${spin}) API ${off ? "已关闭" : keys.length ? "剩 " + money(left) : "未设 key"}${running.length ? ` · ${running.length} 个运行中` : ""}`;
   if (error) item.text += " $(warning)";
   item.backgroundColor = low ? new vscode.ThemeColor("statusBarItem.warningBackground") : undefined;
   const md = new vscode.MarkdownString();
   md.supportThemeIcons = true;
   if (error) md.appendMarkdown(`$(warning) 上次刷新失败（下面是之前的数据）：${error}\n\n`);
+  if (off) md.appendMarkdown("$(circle-slash) **API worker 已关闭**：不接新任务，正在跑的任务会跑完。在 cswap 侧栏的 API Worker 标题栏打开。\n\n");
   md.appendMarkdown("**API worker 本月预算**（api-worker 自己记的账，不是 Console 的实际余额）\n\n");
   if (keys.length) {
     md.appendMarkdown("| key | 已用 | 预留 | 上限 | 剩余 |\n|---|---|---|---|---|\n");
@@ -128,6 +130,14 @@ class ApiTree {
         e.description = "下面是之前的数据";
         e.tooltip = error;
         out.push(e);
+      }
+      if (api.switchState(data) === "off") {
+        const o = new vscode.TreeItem("已关闭：不接新任务");
+        o.iconPath = new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("charts.yellow"));
+        o.description = "点这里打开";
+        o.tooltip = "关闭时 dispatch 和 cloud 都会被拒绝（Claude Code 里的工具也一样），不会再花 API key 或云端额度。正在跑的任务会跑完，要停请在任务上点停止。";
+        o.command = { command: "cswapStatus.apiTurnOn", title: "打开 API Worker" };
+        out.push(o);
       }
       const keysGroup = group("keys", `本月预算（${keys.length} 个 key）`, "credit-card", true);
       keysGroup.contextValue = "apiKeys"; // ＋ 添加 key
@@ -252,6 +262,18 @@ async function closeTask(arg) {
   const r = await api.run(["close", id]);
   if (r.code !== 0) vscode.window.showErrorMessage(r.err || "标记失败");
   refresh();
+}
+
+// The worker's own on/off switch (see api.switchState).
+async function setWorkerEnabled(on) {
+  const r = await api.run(["config", "--set", `enabled=${on}`]);
+  if (r.code !== 0) return vscode.window.showErrorMessage(r.err || "切换失败");
+  await refresh();
+  if (on) return vscode.window.showInformationMessage("API Worker 已打开，可以派新任务。");
+  const running = ((api.state.data && api.state.data.tasks) || []).filter(isRunning).length;
+  vscode.window.showInformationMessage(
+    `API Worker 已关闭：新任务（包括 Claude Code 里的 dispatch / cloud）都会被拒绝。${running ? `还有 ${running} 个任务在跑，会跑完；要停请在任务上点停止。` : ""}`
+  );
 }
 
 async function openSession(arg) {
@@ -430,6 +452,7 @@ module.exports = {
   collectTask,
   dispatchTask,
   showApi,
+  setWorkerEnabled,
   addKey,
   setKeyBudget,
   removeKey,

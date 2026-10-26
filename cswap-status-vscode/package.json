@@ -2,7 +2,7 @@
   "name": "cswap-status",
   "displayName": "cswap Status",
   "description": "cswap 侧栏（活动栏图标）：当前机器、每个 claude-swap 账号的 5 小时/7 天用量圆环和一键切换、主账号、cswap 自动切换在做什么（阈值、当前结论、下一个账号、切换记录、暂停/恢复）、api-worker 每个 Console API key 的本月花费和任务；精简的状态栏条目；为所有账号保持 Claude Code 的 Dynamic workflows（Ultracode）开启；在 tmux 里启动 Claude 方便手机操作（cswap-remote）。",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "publisher": "chenyu",
   "license": "MIT",
   "engines": {
@@ -99,6 +99,18 @@
         "title": "派一个新任务",
         "category": "API worker",
         "icon": "$(add)"
+      },
+      {
+        "command": "cswapStatus.apiTurnOff",
+        "title": "关闭 API Worker（不接新任务）",
+        "category": "API worker",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "cswapStatus.apiTurnOn",
+        "title": "打开 API Worker",
+        "category": "API worker",
+        "icon": "$(debug-start)"
       },
       {
         "command": "cswapStatus.apiOpenResult",
@@ -336,8 +348,18 @@
         },
         {
           "command": "cswapStatus.apiDispatch",
-          "when": "view == cswapStatus.api",
+          "when": "view == cswapStatus.api && cswapStatus.apiSwitch != off",
           "group": "navigation@1"
+        },
+        {
+          "command": "cswapStatus.apiTurnOff",
+          "when": "view == cswapStatus.api && cswapStatus.apiSwitch == on",
+          "group": "navigation@0"
+        },
+        {
+          "command": "cswapStatus.apiTurnOn",
+          "when": "view == cswapStatus.api && cswapStatus.apiSwitch == off",
+          "group": "navigation@0"
         },
         {
           "command": "cswapStatus.apiRefresh",
@@ -510,6 +532,14 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "cswapStatus.apiTurnOff",
+          "when": "cswapStatus.apiSwitch == on"
+        },
+        {
+          "command": "cswapStatus.apiTurnOn",
+          "when": "cswapStatus.apiSwitch == off"
+        },
         {
           "command": "cswapStatus.switchAccount",
           "when": "false"

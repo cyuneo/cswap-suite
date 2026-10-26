@@ -303,6 +303,25 @@ class LimitTests(Base):
         self.assertEqual((stored["maxParallel"], stored["keyBudgets"]), (2, {"a": 7.0}))
 
 
+    def test_switched_off_refuses_new_tasks_only(self):
+        self.set_key()
+        tid = json.loads(self.cli("start", "-p", "x", "--no-worktree", env={"FAKE_SDK_SLEEP": "30"}).stdout)["id"]
+        self.assertEqual(self.cli("config", "--set", "enabled=false").returncode, 0)
+        r = self.cli("start", "-p", "y", "--no-worktree")
+        self.assertIn("已关闭", json.loads(r.stderr)["error"])
+        lst = json.loads(self.cli("list").stdout)
+        self.assertIs(lst["enabled"], False)
+        self.assertEqual(len(lst["tasks"]), 1)  # nothing recorded for the refused one
+        self.assertIn(json.loads(self.cli("status", tid).stdout)["state"], ("queued", "running"))
+        r = self.cli("cloud", "--cwd", str(self.work), input="x")
+        self.assertIn("已关闭", json.loads(r.stderr)["error"])
+        self.cli("cancel", tid)
+        self.assertNotEqual(self.cli("config", "--set", "enabled=maybe").returncode, 0)
+        self.cli("config", "--set", "enabled=on")
+        self.assertIs(json.loads(self.cli("list").stdout)["enabled"], True)
+        self.assertEqual(self.cli("start", "-p", "z", "--no-worktree").returncode, 0)
+
+
 class StartStatusTests(Base):
     def test_worker_state_is_not_overwritten_by_start(self):
         """The worker may write "running" at any moment after it is started,

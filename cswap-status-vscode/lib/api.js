@@ -56,12 +56,17 @@ async function list() {
   return run(base);
 }
 
+// The worker's own switch (`config --set enabled=`): "on", "off", or "" for
+// a worker too old to have one. Off means it refuses new tasks.
+const switchState = (data) => (!data || typeof data.enabled !== "boolean" ? "" : data.enabled ? "on" : "off");
+
 // Returns the finished tasks (for the caller to announce).
 async function refresh() {
   vscode.commands.executeCommand("setContext", "cswapStatus.apiAvailable", available());
   if (!enabled() || !available()) {
     state.data = null;
     state.error = "";
+    vscode.commands.executeCommand("setContext", "cswapStatus.apiSwitch", "");
     changed.fire();
     return [];
   }
@@ -81,6 +86,7 @@ async function refresh() {
   }
   state.data = data;
   state.error = "";
+  vscode.commands.executeCommand("setContext", "cswapStatus.apiSwitch", switchState(data));
   const tasks = data.tasks || [];
   // Tasks that finished since the last refresh (not on the first one).
   const finished = [];
@@ -101,4 +107,4 @@ function taskLine(t) {
   return `${t.id} · ${kind} · ${taskStateZh(t.state)}${cost}`;
 }
 
-module.exports = { state, changed, run, reset, refresh, available, enabled, taskLine };
+module.exports = { state, changed, run, reset, refresh, available, enabled, switchState, taskLine };
