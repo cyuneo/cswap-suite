@@ -188,16 +188,30 @@ button.link:hover { background: none; text-decoration: underline; }
 `;
 
 const SCRIPT = `
+// errors before the API exists are kept and sent once it does
+const early = [];
+const report = (msg) => (window.cswapApi ? window.cswapApi.postMessage({ type: "pageError", msg }) : early.push(msg));
+window.addEventListener("error", (e) => report(String(e.message)));
+window.addEventListener("unhandledrejection", (e) => report("unhandled: " + String(e.reason)));
+window.addEventListener("securitypolicyviolation", (e) => report("CSP blocked " + e.violatedDirective));
 const vscode = acquireVsCodeApi();
+window.cswapApi = vscode;
+early.splice(0).forEach(report);
 const root = document.getElementById("root");
+const size = () => root.innerHTML.length + " chars, " + document.body.scrollHeight + "px tall, " + innerWidth + "x" + innerHeight;
+let first = true;
 window.addEventListener("message", (e) => {
-  if (e.data && e.data.type === "render") root.innerHTML = e.data.html;
+  if (e.data && e.data.type === "render") {
+    root.innerHTML = e.data.html;
+    if (first) vscode.postMessage({ type: "rendered", size: size() });
+    first = false;
+  }
 });
 document.addEventListener("click", (e) => {
   const b = e.target.closest("button[data-cmd]");
   if (b) vscode.postMessage({ type: b.dataset.cmd, n: b.dataset.n || "" });
 });
-vscode.postMessage({ type: "ready" });
+vscode.postMessage({ type: "ready", size: size() });
 `;
 
 function pageHtml(body) {
@@ -213,18 +227,87 @@ function pageHtml(body) {
 </body></html>`;
 }
 
+// What the page did, for a blank view: VS Code resolved it, the page script
+// ran ("ready"), its first body was shown, or the page hit an error. One line
+// each in the extension's log folder (accounts-view.log).
+const LOG_MAX = 300;
+const READY_WAIT_MS = 10000; // no "ready" this long after resolve: the page did not load
+let logFile = null;
+let logLines = 0;
+function setLogDir(dir) {
+  logFile = dir ? require("path").join(dir, "accounts-view.log") : null;
+  logLines = 0;
+}
+function log(line) {
+  if (!logFile) return;
+  try {
+    const fs = require("fs");
+    fs.mkdirSync(require("path").dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
+    if (++logLines > LOG_MAX) {
+      const keep = fs.readFileSync(logFile, "utf8").split("\n").filter(Boolean).slice(-LOG_MAX / 2);
+      fs.writeFileSync(logFile, keep.join("\n") + "\n");
+      logLines = keep.length;
+    }
+  } catch {
+    // logging never breaks the view
+  }
+}
+
+// Shown once per window when the page never loads: VS Code's own web page
+// layer is stuck (its service worker; microsoft/vscode#125993), so offer the
+// list view, which does not need it.
+let warned = false;
+function noReady() {
+  log(`no-ready: the page did not load within ${READY_WAIT_MS / 1000}s`);
+  if (warned) return;
+  warned = true;
+  const list = "改用列表显示";
+  const reload = "重新加载网页面板";
+  Promise.resolve(
+    vscode.window.showWarningMessage(
+      "cswap 的账号面板没有加载出来（VS Code 的网页面板出了问题，账号数据是好的）。可以改用列表显示，或者重新加载网页面板。",
+      list,
+      reload
+    )
+  ).then((pick) => {
+    if (pick === list) return vscode.workspace.getConfiguration("cswapStatus").update("accountsStyle", "list", vscode.ConfigurationTarget.Global);
+    if (pick === reload) return vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction");
+    return undefined;
+  }, () => {});
+}
+
 class AccountsView {
-  constructor() {
+  constructor(opts) {
     this.view = null;
+    this.timer = null;
+    this.readyWaitMs = (opts && opts.readyWaitMs) || READY_WAIT_MS;
   }
   resolveWebviewView(view) {
     this.view = view;
-    view.webview.options = { enableScripts: true };
+    log(`resolve: visible=${view.visible}`);
+    view.webview.options = { enableScripts: true, localResourceRoots: [] };
     view.webview.html = pageHtml(safeBody(accounts.state));
     view.webview.onDidReceiveMessage((m) => this.onMessage(m));
+    this.wait();
     view.onDidDispose(() => {
+      log("dispose");
+      this.stopWaiting();
       if (this.view === view) this.view = null;
     });
+    if (view.onDidChangeVisibility) view.onDidChangeVisibility(() => log(`visible=${view.visible}`));
+  }
+  wait() {
+    this.stopWaiting();
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      noReady();
+    }, this.readyWaitMs);
+    if (this.timer.unref) this.timer.unref();
+  }
+  stopWaiting() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
   }
   // The page is kept and only its body replaced, so a refresh does not
   // reload it (a hidden view gets the latest body when it says "ready").
@@ -233,7 +316,11 @@ class AccountsView {
   }
   onMessage(m) {
     if (!m) return;
-    if (m.type === "ready") return this.update();
+    if (m.type === "ready" || m.type === "rendered" || m.type === "pageError") log(`${m.type}: ${String(m.size || m.msg || "")}`);
+    if (m.type === "ready") {
+      this.stopWaiting();
+      return this.update();
+    }
     if (m.type === "switch") return accounts.switchAccount({ accountNumber: m.n });
     if (m.type === "relogin") return manage.relogin({ accountNumber: m.n });
     if (m.type === "add") return manage.addAccount();
@@ -241,4 +328,4 @@ class AccountsView {
   }
 }
 
-module.exports = { AccountsView, bodyHtml, safeBody, cardContext, pageHtml };
+module.exports = { AccountsView, bodyHtml, safeBody, cardContext, backAt, pageHtml, setLogDir };

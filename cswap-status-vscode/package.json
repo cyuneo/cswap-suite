@@ -2,7 +2,7 @@
   "name": "cswap-status",
   "displayName": "cswap Status",
   "description": "cswap 侧栏（活动栏图标）：当前机器、每个 claude-swap 账号的 5 小时/7 天用量圆环和一键切换、主账号、cswap 自动切换在做什么（阈值、当前结论、下一个账号、切换记录、暂停/恢复）、api-worker 每个 Console API key 的本月花费和任务；精简的状态栏条目；为所有账号保持 Claude Code 的 Dynamic workflows（Ultracode）开启；在 tmux 里启动 Claude 方便手机操作（cswap-remote）。",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "publisher": "chenyu",
   "license": "MIT",
   "engines": {
@@ -189,7 +189,8 @@
         "cswapStatus.path": {
           "type": "string",
           "default": "",
-          "description": "cswap 命令的路径。留空 = 先找 ~/.local/bin/cswap，再找 PATH 里的 cswap。"
+          "description": "cswap 命令的路径。留空 = 先找 ~/.local/bin/cswap，再找 PATH 里的 cswap。",
+          "scope": "machine"
         },
         "cswapStatus.keepWorkflowsEnabled": {
           "type": "boolean",
@@ -238,6 +239,19 @@
             "不在状态栏显示，只用侧栏"
           ],
           "description": "状态栏显示多少内容。详情都在左侧活动栏的 cswap 侧栏里。"
+        },
+        "cswapStatus.accountsStyle": {
+          "type": "string",
+          "enum": [
+            "rings",
+            "list"
+          ],
+          "enumDescriptions": [
+            "每个账号一张卡片，5h / 7d 用量画成圆环（网页面板）",
+            "每个账号一行文字（VS Code 自带的列表）：网页面板加载不出来时用这个"
+          ],
+          "default": "rings",
+          "description": "账号面板的样式。网页面板在某些窗口里加载不出来（VS Code 的问题）时，改成 list。"
         }
       }
     },
@@ -246,7 +260,13 @@
         {
           "type": "webview",
           "id": "cswapStatus.accounts",
-          "name": "账号"
+          "name": "账号",
+          "when": "config.cswapStatus.accountsStyle != list"
+        },
+        {
+          "id": "cswapStatus.accountsList",
+          "name": "账号",
+          "when": "config.cswapStatus.accountsStyle == list"
         },
         {
           "id": "cswapStatus.auto",
@@ -263,27 +283,27 @@
       "view/title": [
         {
           "command": "cswapStatus.addAccount",
-          "when": "view == cswapStatus.accounts",
+          "when": "view == cswapStatus.accounts || view == cswapStatus.accountsList",
           "group": "navigation@0"
         },
         {
           "command": "cswapStatus.refresh",
-          "when": "view == cswapStatus.accounts",
+          "when": "view == cswapStatus.accounts || view == cswapStatus.accountsList",
           "group": "navigation@1"
         },
         {
           "command": "cswapStatus.dashboard",
-          "when": "view == cswapStatus.accounts",
+          "when": "view == cswapStatus.accounts || view == cswapStatus.accountsList",
           "group": "navigation@2"
         },
         {
           "command": "cswapStatus.startInTmux",
-          "when": "view == cswapStatus.accounts",
+          "when": "view == cswapStatus.accounts || view == cswapStatus.accountsList",
           "group": "more@2"
         },
         {
           "command": "cswapStatus.continueInTmux",
-          "when": "view == cswapStatus.accounts",
+          "when": "view == cswapStatus.accounts || view == cswapStatus.accountsList",
           "group": "more@3"
         },
         {
@@ -372,6 +392,56 @@
           "command": "cswapStatus.apiKeyRemove",
           "when": "view == cswapStatus.api && viewItem == apiKey",
           "group": "9@1"
+        },
+        {
+          "command": "cswapStatus.switchAccount",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-other/",
+          "group": "1_switch@1"
+        },
+        {
+          "command": "cswapStatus.accountAlias",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-(active|other|unswitchable)/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "cswapStatus.accountLimits",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-(active|other|unswitchable)/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "cswapStatus.accountReserveOn",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-(active|other|unswitchable)/ && !(viewItem =~ /reserve/)",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "cswapStatus.accountReserveOff",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /reserve/",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "cswapStatus.accountDisable",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-(active|other|unswitchable)/ && viewItem =~ / on/",
+          "group": "3_rotation@1"
+        },
+        {
+          "command": "cswapStatus.accountEnable",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ / off/",
+          "group": "3_rotation@1"
+        },
+        {
+          "command": "cswapStatus.accountRelogin",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-(active|other|unswitchable)/",
+          "group": "8_login@1"
+        },
+        {
+          "command": "cswapStatus.accountRemove",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /^cswapAccount/ && viewItem =~ /kind-(active|other|unswitchable)/",
+          "group": "9_remove@1"
+        },
+        {
+          "command": "cswapStatus.switchAccount",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /kind-other/ && !(viewItem =~ /limit/)",
+          "group": "inline"
         }
       ],
       "webview/context": [

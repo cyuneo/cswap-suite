@@ -83,6 +83,41 @@ const menu = (c) =>
   // a page that fails to build says why instead of staying blank
   const web = require("../lib/accountsWeb");
   assert.match(web.safeBody({ loaded: true, rows: null }), /账号面板出错/);
+  // what the page did goes to accounts-view.log in the extension's log folder
+  const logDir = require("fs").mkdtempSync(require("path").join(require("os").tmpdir(), "cswap-log-"));
+  web.setLogDir(logDir);
+  const probe = new web.AccountsView();
+  const pv = stub.fakeWebviewView();
+  probe.resolveWebviewView(pv);
+  probe.onMessage({ type: "ready", size: "10 chars, 0px tall" });
+  probe.onMessage({ type: "pageError", msg: "boom" });
+  const logged = require("fs").readFileSync(require("path").join(logDir, "accounts-view.log"), "utf8");
+  assert.match(logged, /resolve: visible=/);
+  assert.match(logged, /ready: 10 chars, 0px tall/);
+  assert.match(logged, /pageError: boom/);
+  // a page that never says "ready": logged, and one offer to switch to the list
+  const stuck = new web.AccountsView({ readyWaitMs: 20 });
+  answers.warn.push("改用列表显示");
+  stuck.resolveWebviewView(stub.fakeWebviewView());
+  await stub.sleep(60);
+  assert.match(require("fs").readFileSync(require("path").join(logDir, "accounts-view.log"), "utf8"), /no-ready/);
+  assert.match(shown.warn[shown.warn.length - 1], /账号面板没有加载出来/);
+  await stub.sleep(10);
+  assert.deepStrictEqual(stub.configUpdates[stub.configUpdates.length - 1].slice(0, 2), ["accountsStyle", "list"]);
+  const warns = shown.warn.length;
+  new web.AccountsView({ readyWaitMs: 20 }).resolveWebviewView(stub.fakeWebviewView());
+  await stub.sleep(60);
+  assert.strictEqual(shown.warn.length, warns, "offered once per window");
+  // a page that loads in time: no warning
+  const fine = new web.AccountsView({ readyWaitMs: 20 });
+  const fv = stub.fakeWebviewView();
+  fine.resolveWebviewView(fv);
+  fine.onMessage({ type: "ready", size: "" });
+  assert.strictEqual(fine.timer, null);
+  delete stub.config.accountsStyle;
+  stub.configUpdates.length = 0;
+  web.setLogDir(null);
+  require("fs").rmSync(logDir, { recursive: true, force: true });
   for (let i = 0; i < 50 && !statusItems[0].text; i++) await stub.sleep(50);
   const item = statusItems[0];
 
@@ -155,6 +190,47 @@ const menu = (c) =>
   assert.ok(!c["2"].html.includes('data-cmd="switch"'));
   assert.deepStrictEqual(menu(c["2"]), ["accountAlias", "accountLimits", "accountReserveOn", "accountEnable", "accountRelogin", "accountRemove"]);
   assert.deepStrictEqual(menu(c["4"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOn", "accountDisable", "accountRelogin", "accountRemove"]);
+
+  // the same accounts as a plain list (cswapStatus.accountsStyle = list),
+  // with the same right-click items as the cards, and 切换 inline where the
+  // card has its button
+  const L = require("../lib/accountsList");
+  const rows = new L.AccountsList().getChildren();
+  assert.deepStrictEqual(rows[0].label, "阈值 98%");
+  assert.deepStrictEqual(rows[0].command.command, "cswapStatus.autoThreshold");
+  const byNum = Object.fromEntries(rows.slice(1).map((r) => [r.accountNumber, r]));
+  assert.strictEqual(byNum["3"].label, "#3 c@x");
+  assert.strictEqual(byNum["3"].description, "5h 99/98% · 7d 20/98% · 当前 · 到上限");
+  assert.strictEqual(byNum["5"].description, "5h 60/70% · 7d 10/98% · 不在时段");
+  assert.strictEqual(byNum["2"].iconPath.id, "circle-slash");
+  function listWhen(expr, item) {
+    return expr.split("&&").every((part) => {
+      const p = part.trim();
+      let m;
+      if ((m = p.match(/^view == (\S+)$/))) return m[1] === "cswapStatus.accountsList";
+      if ((m = p.match(/^(!?)\(?viewItem =~ \/(.*)\/\)?$/))) return new RegExp(m[2]).test(item.contextValue) !== (m[1] === "!");
+      throw new Error(`when-clause not understood: ${p}`);
+    });
+  }
+  const listMenu = (item, inline) =>
+    pkg.contributes.menus["view/item/context"]
+      .filter((m) => m.when.includes("cswapStatus.accountsList") && (m.group === "inline") === inline && listWhen(m.when, item))
+      .map((m) => m.command.replace("cswapStatus.", ""));
+  for (const n of Object.keys(c)) {
+    assert.deepStrictEqual(listMenu(byNum[n], false), menu(c[n]), `#${n} right-click`);
+    assert.strictEqual(listMenu(byNum[n], true).length === 1, c[n].html.includes('data-cmd="switch"'), `#${n} inline 切换`);
+  }
+  // the two 账号 views are never shown together, and share the title buttons
+  const views = pkg.contributes.views.cswap;
+  assert.deepStrictEqual(views.slice(0, 2).map((v) => [v.id, v.when]), [
+    ["cswapStatus.accounts", "config.cswapStatus.accountsStyle != list"],
+    ["cswapStatus.accountsList", "config.cswapStatus.accountsStyle == list"],
+  ]);
+  for (const t of pkg.contributes.menus["view/title"].filter((m) => m.when.includes("cswapStatus.accounts"))) {
+    assert.ok(t.when.includes("cswapStatus.accountsList"), t.command);
+  }
+  // a workspace's .vscode/settings.json cannot choose the program the side bar runs
+  assert.strictEqual(pkg.contributes.configuration.properties["cswapStatus.path"].scope, "machine");
 
   // 切换 on a fine account: no question, runs cswap switch in the background
   const infos = shown.info.length;

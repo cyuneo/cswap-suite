@@ -20,6 +20,7 @@ const format = require("./lib/format");
 const accounts = require("./lib/accounts");
 const accountsView = require("./lib/accountsView");
 const accountsWeb = require("./lib/accountsWeb");
+const accountsList = require("./lib/accountsList");
 const autoswitch = require("./lib/autoswitch");
 const satellite = require("./lib/satellite");
 const manage = require("./lib/manage");
@@ -61,6 +62,7 @@ function schedule() {
 
 function activate(context) {
   runtime.extPath = context.extensionPath;
+  if (context.logUri) accountsWeb.setLogDir(context.logUri.fsPath);
   runtime.refreshAccounts = refreshAccounts;
   runtime.refreshApi = refreshApi;
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
@@ -77,6 +79,7 @@ function activate(context) {
     autoswitch.changed,
     api.changed,
     vscode.window.registerWebviewViewProvider("cswapStatus.accounts", accountsPage),
+    vscode.window.registerTreeDataProvider("cswapStatus.accountsList", new accountsList.AccountsList()),
     vscode.window.registerTreeDataProvider("cswapStatus.auto", new autoswitch.AutoTree()),
     vscode.window.registerTreeDataProvider("cswapStatus.api", new apiView.ApiTree()),
     cmd("cswapStatus.openPanel", openPanel),
