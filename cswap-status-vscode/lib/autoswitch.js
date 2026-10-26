@@ -252,6 +252,9 @@ function rulesRow(block) {
         : "",
       `检查间隔：${block.intervalSeconds ?? "?"} 秒`,
       `冷却：${block.cooldownSeconds ?? "?"} 秒（只限制提前切换、回到副账号、时段、先用完）`,
+      typeof block.manualHoldSeconds === "number"
+        ? `手动保持：${block.manualHoldSeconds > 0 ? f.span(block.manualHoldSeconds) : "关"}（手动切到一个账号后，这段时间里只在到上限时切走）`
+        : "",
       `回差：${f.pct(block.hysteresisPct)} 点（目标账号要比当前账号多这么多余量才会主动切）`,
       `策略：${block.strategy === "consume-first" ? "consume-first（先用完快要重置的账号）" : `${block.strategy || "best"}（选余量最多的账号）`}`,
     ]),
@@ -266,6 +269,7 @@ const REASON_ICON = {
   "reserve-hold": ["shield", "charts.yellow"],
   "below-personal-limit": ["check", "charts.green"],
   cooldown: ["watch"],
+  "manual-hold": ["person"],
   "stale-usage": ["history"],
   "active-idle": ["history"],
   "active-usage-unknown": ["question"],
@@ -283,10 +287,10 @@ function decisionRow(svc, now) {
   const [icon, color] = svc.trigger ? ["zap", "charts.yellow"] : REASON_ICON[svc.reason] || ["info"];
   const blocked = color === "charts.red";
   const verdict = svc.trigger ? `切换（${f.triggerZh(svc.trigger)}）` : blocked ? "无法切换" : "不切换";
-  // A translated reason makes cswap's English prose detail redundant; numbers stay.
+  // A translated reason stands for cswap's English detail (the numbers are on
+  // the rows below); the detail stays in the tooltip.
   const known = svc.reason && f.reasonZh(svc.reason) !== svc.reason;
-  const prose = /^[a-z ;,.()'-]*$/i.test(svc.detail || "");
-  const desc = [f.reasonZh(svc.reason), known && prose ? "" : noEmail(svc.detail), svc.lastTickAt ? f.ago(svc.lastTickAt, now) : ""].filter(Boolean).join(" · ");
+  const desc = [f.reasonZh(svc.reason), known ? "" : noEmail(svc.detail), svc.lastTickAt ? f.ago(svc.lastTickAt, now) : ""].filter(Boolean).join(" · ");
   return item(`当前 #${svc.active || "?"}：${verdict}`, icon, color, {
     description: desc,
     tooltip: md([
@@ -323,7 +327,7 @@ function distanceRow(r, now) {
   }
   if (binding) lines.push(`先到线的是 ${binding}`);
   if (typeof r.usageAgeSeconds === "number") lines.push(`用量是 ${f.span(r.usageAgeSeconds)}前读的${r.lastError ? `（最近一次读取出错：${r.lastError}）` : ""}`);
-  if (f.rowState(r) === "reserve") lines.push("当前是主账号：副账号能用时会自动切回（回到副账号），受冷却限制。");
+  if (f.rowState(r) === "reserve") lines.push("当前是主账号：副账号能用时会自动切回（回到副账号）。冷却中或手动切过来的保持期内不会切回。");
   return item(`#${r.number} 距离触发`, "dashboard", color, {
     description: `5h ${f.pct(r.usage5h)}→${f.pct(r.max5h)} · 7d ${f.pct(r.usage7d)}→${f.pct(r.max7d)}`,
     tooltip: md(lines),
@@ -445,9 +449,18 @@ class AutoTree {
     const active = state.rows.find((r) => r.active);
     if (active) out.push(distanceRow(active, now));
     out.push(nextRow(block, active));
-    if (typeof block.cooldownUntil === "number" && block.cooldownUntil > now)
+    // While paused nothing switches anyway; the view refreshes once a minute,
+    // so an end time rather than a countdown.
+    const paused = isPaused(block.pausedUntil, now);
+    if (!paused && typeof block.manualHoldUntil === "number" && block.manualHoldUntil > now)
       out.push(
-        item(`冷却中 还剩 ${f.mmss(block.cooldownUntil - now)}`, "watch", undefined, {
+        item(`手动切换 保持到 ${f.clock(block.manualHoldUntil)}`, "person", undefined, {
+          tooltip: "你手动切到了这个账号，到这个时间之前自动切换不会主动切走（提前切换、回到副账号、时段、先用完都不做）；到上限时照样切走。",
+        })
+      );
+    if (!paused && typeof block.cooldownUntil === "number" && block.cooldownUntil > now)
+      out.push(
+        item(`冷却到 ${f.clock(block.cooldownUntil)}`, "watch", undefined, {
           tooltip: "冷却只影响提前切换、回到副账号、时段和先用完；到上限的切换不受影响。",
         })
       );

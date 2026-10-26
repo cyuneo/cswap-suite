@@ -156,6 +156,7 @@ const REASON_ZH = {
   "reserve-hold": "停在主账号，等副账号可用",
   "below-personal-limit": "低于个人上限",
   cooldown: "冷却中",
+  "manual-hold": "手动切换后保持",
   "stale-usage": "用量数据太旧",
   "active-idle": "当前账号空闲",
   "active-usage-unknown": "当前账号用量未知",

@@ -73,7 +73,7 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   assert.strictEqual(l[2], "当前 #3：不切换");
   assert.strictEqual(l[3], "#3 距离触发");
   assert.strictEqual(l[4], "下一个 #1（主账号）");
-  assert.match(l[5], /^冷却中 还剩 [23]:\d\d$/);
+  assert.match(l[5], /^冷却到 \d\d:\d\d$/);
   assert.strictEqual(l[6], "上次 #2 → #3 · 个人上限");
   assert.strictEqual(l[7], "最近切换（2 次）");
   assert.strictEqual(l[8], "#4 已隔离 invalid_grant");
@@ -84,7 +84,9 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   assert.match(svc.description, /^自 \d\d:\d\d · 每 60s$/);
   const decision = find("当前");
   assert.strictEqual(decision.iconPath.id, "check");
-  assert.match(decision.description, /^低于阈值 · #3 5h 47% \/ 98%, 7d 22% \/ 98% · \d+ 秒前$/);
+  // the translated reason stands for the English detail, which stays in the tooltip
+  assert.match(decision.description, /^低于阈值 · \d+ 秒前$/);
+  assert.match(decision.tooltip.value, /详情：#3 5h 47% \/ 98%/);
   const dist = find("#3 距离触发");
   assert.strictEqual(dist.description, "5h 47→98 · 7d 22→98");
   assert.strictEqual(dist.iconPath.color.id, "charts.green");
@@ -161,6 +163,7 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   assert.strictEqual(item.backgroundColor.id, "statusBarItem.warningBackground");
   assert.strictEqual(contexts["cswapAuto.paused"], true);
   assert.strictEqual(contexts["cswapAuto.canPause"], false);
+  assert.ok(!labels().some((x) => /^冷却到/.test(x)), "paused: no cooldown row");
   setPolicy(ROWS, block({ pausedUntil: "forever" }));
   await T.refresh();
   assert.strictEqual(find("自动切换").description, "一直暂停");
@@ -288,6 +291,19 @@ const find = (prefix) => top().find((i) => String(i.label).startsWith(prefix));
   assert.deepStrictEqual(labels(), ["cswap policy list 没有输出 JSON（这个 cswap 可能不含 policy 命令）"]);
 
   ext.deactivate();
+  // ---- a manual switch is held: its own row, the reason in Chinese, the rule in the tooltip
+  const held = block({ manualHoldUntil: now() + 3600, manualHoldSeconds: 7200, cooldownUntil: null });
+  held.service = { ...held.service, reason: "manual-hold", detail: "switched by hand; staying on #3 until 23:59" };
+  setPolicy(ROWS, held);
+  await T.refresh();
+  assert.match(find("手动切换").label, /^手动切换 保持到 \d\d:\d\d$/);
+  assert.strictEqual(find("当前").iconPath.id, "person");
+  assert.match(find("当前").description, /^手动切换后保持 · /);
+  assert.match(find("切换阈值").tooltip.value, /手动保持：2 小时/);
+  setPolicy(ROWS, block({ manualHoldUntil: now() - 5 }));
+  await T.refresh();
+  assert.ok(!find("手动切换"), "an ended hold has no row");
+
   console.log("autoswitch tests: OK");
   // excluded reasons exactly as cswap writes them come out in Chinese
   const zh = T.autoswitch.excludedZh;
