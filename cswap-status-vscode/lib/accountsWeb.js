@@ -12,6 +12,7 @@ const f = require("./format");
 const accounts = require("./accounts");
 const satellite = require("./satellite");
 const manage = require("./manage");
+const accountsMode = require("./accountsMode");
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -254,29 +255,6 @@ function log(line) {
   }
 }
 
-// Shown once per window when the page never loads: VS Code's own web page
-// layer is stuck (its service worker; microsoft/vscode#125993), so offer the
-// list view, which does not need it.
-let warned = false;
-function noReady() {
-  log(`no-ready: the page did not load within ${READY_WAIT_MS / 1000}s`);
-  if (warned) return;
-  warned = true;
-  const list = "改用列表显示";
-  const reload = "重新加载网页面板";
-  Promise.resolve(
-    vscode.window.showWarningMessage(
-      "cswap 的账号面板没有加载出来（VS Code 的网页面板出了问题，账号数据是好的）。可以改用列表显示，或者重新加载网页面板。",
-      list,
-      reload
-    )
-  ).then((pick) => {
-    if (pick === list) return vscode.workspace.getConfiguration("cswapStatus").update("accountsStyle", "list", vscode.ConfigurationTarget.Global);
-    if (pick === reload) return vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction");
-    return undefined;
-  }, () => {});
-}
-
 class AccountsView {
   constructor(opts) {
     this.view = null;
@@ -289,21 +267,36 @@ class AccountsView {
     view.webview.options = { enableScripts: true, localResourceRoots: [] };
     view.webview.html = pageHtml(safeBody(accounts.state));
     view.webview.onDidReceiveMessage((m) => this.onMessage(m));
-    this.wait();
+    if (view.visible !== false) this.wait();
     view.onDidDispose(() => {
       log("dispose");
+      if (this.view !== view) return; // an older view: the timer is the newer one's
       this.stopWaiting();
-      if (this.view === view) this.view = null;
+      this.view = null;
     });
-    if (view.onDidChangeVisibility) view.onDidChangeVisibility(() => log(`visible=${view.visible}`));
+    // A hidden view loses its page and showing it again loads the page anew,
+    // which can fail the same way: wait for "ready" only while it is shown.
+    if (view.onDidChangeVisibility)
+      view.onDidChangeVisibility(() => {
+        log(`visible=${view.visible}`);
+        if (this.view !== view) return;
+        if (view.visible) this.wait();
+        else this.stopWaiting();
+      });
   }
   wait() {
     this.stopWaiting();
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      noReady();
+    const timer = setTimeout(() => {
+      // a "ready" that arrived while the extension host was busy is handled first
+      setImmediate(() => {
+        if (this.timer !== timer) return;
+        this.timer = null;
+        log(`no-ready: the page did not load within ${this.readyWaitMs / 1000}s`);
+        accountsMode.onPageFailed();
+      });
     }, this.readyWaitMs);
-    if (this.timer.unref) this.timer.unref();
+    this.timer = timer;
+    if (timer.unref) timer.unref();
   }
   stopWaiting() {
     if (this.timer) clearTimeout(this.timer);

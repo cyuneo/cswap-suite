@@ -1,22 +1,35 @@
-// The 账号 view as a plain list (cswapStatus.accountsStyle = "list"): the
-// same accounts as the ring cards in accountsWeb.js, for when VS Code cannot
-// show a web page in the side bar. One row per account; right-click offers
-// the same actions as on a card (package.json view/item/context, matched on
-// the contextValue words below), and an inline button switches.
+// The 账号 view as a list (VS Code's own tree): the same accounts as the ring
+// cards in accountsWeb.js, for when VS Code cannot show a web page in the
+// side bar (accountsMode.js picks which one shows). One row per account with
+// its usage as a small double ring (ringIcon.js); right-click offers the same
+// actions as on a card (package.json view/item/context, matched on the
+// contextValue words below), and an inline button switches.
 
 const vscode = require("vscode");
 const f = require("./format");
 const accounts = require("./accounts");
 const satellite = require("./satellite");
 const { cardContext, backAt } = require("./accountsWeb");
+const ringIcon = require("./ringIcon");
 
-// "cswapAccount kind-other on reserve limit": what the menus match with =~
-// ("limit": at a limit or outside its hours, so no inline 切换 button)
+let iconDir = null; // where the ring icons are written (the extension's storage)
+function setIconDir(dir) {
+  iconDir = dir || null;
+  ringIcon.pruneNow(iconDir);
+}
+
+// "cswapAccount kind-other on reserve limit relogin": what the menus match
+// with =~ ("limit": at a limit or outside its hours, so no inline 切换 button;
+// "relogin": its usage cannot be read, so the inline button logs in again,
+// like the card's 重新登录)
 function contextValue(r) {
   const c = cardContext(r);
   const st = f.rowState(r);
   const blocked = st === "limit" || st === "off-schedule";
-  return ["cswapAccount", `kind-${c.cswapKind}`, c.cswapOn ? "on" : "off", c.cswapReserve && "reserve", blocked && "limit"].filter(Boolean).join(" ");
+  const relogin = r.number && (r.lastError || r.quarantined);
+  return ["cswapAccount", `kind-${c.cswapKind}`, c.cswapOn ? "on" : "off", c.cswapReserve && "reserve", blocked && "limit", relogin && "relogin"]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function windowText(label, used, max) {
@@ -39,10 +52,19 @@ function accountItem(r, now) {
   } else if (!["active", "ready", "reserve"].includes(st)) tags.push(f.statusZh(r));
   if (r.lastError) tags.push("读取用量失败");
   it.description = [windowText("5h", r.usage5h, r.max5h), windowText("7d", r.usage7d, r.max7d), ...tags].join(" · ");
-  const icon =
-    r.lastError || r.quarantined ? "warning" : st === "limit" ? "error" : st === "disabled" ? "circle-slash" : r.active ? "pass-filled" : "account";
-  it.iconPath = new vscode.ThemeIcon(icon);
-  it.tooltip = [r.email && r.email !== name && r.email, f.accountDetail(r), r.reason, r.lastError && `读取用量失败（${r.lastError}）`]
+  const files = ringIcon.iconFiles(iconDir, r, !cardContext(r).cswapOn);
+  if (files) it.iconPath = { light: vscode.Uri.file(files.light), dark: vscode.Uri.file(files.dark) };
+  else
+    it.iconPath = new vscode.ThemeIcon(
+      r.lastError || r.quarantined ? "warning" : st === "limit" ? "error" : st === "disabled" ? "circle-slash" : r.active ? "pass-filled" : "account"
+    );
+  it.tooltip = [
+    r.email && r.email !== name && r.email,
+    f.accountDetail(r),
+    r.reason,
+    r.lastError && `读取用量失败（${r.lastError}）`,
+    "图标：外圈 5 小时，内圈 7 天；接近这个账号的切换线变黄，到线变红",
+  ]
     .filter(Boolean)
     .join("\n");
   return it;
@@ -76,6 +98,7 @@ class AccountsList {
       out.push(plainItem(`阈值 ${f.pct(a.threshold)}%${weekly}`, "dashboard", "cswapStatus.autoThreshold", "自动切换阈值：没设自己上限的账号用到这里就切换。点击修改。"));
     }
     if (!state.rows.length) out.push(plainItem("还没有账号：点这里添加", "add", "cswapStatus.addAccount"));
+    ringIcon.pruneNow(iconDir);
     for (const r of state.rows) out.push(accountItem(r, now));
     const note = satellite.syncNote();
     if (note) out.push(plainItem(note, "warning"));
@@ -83,4 +106,4 @@ class AccountsList {
   }
 }
 
-module.exports = { AccountsList, accountItem, contextValue };
+module.exports = { AccountsList, accountItem, contextValue, setIconDir };

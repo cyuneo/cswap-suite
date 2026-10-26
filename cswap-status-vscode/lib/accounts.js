@@ -18,7 +18,11 @@ const changed = new vscode.EventEmitter();
 
 async function fetchRows() {
   const bin = resolveBin("path", "cswap");
-  if (!bin) return { bin: null, error: "cswap 未找到（cswapStatus.path、~/.local/bin/cswap 或 PATH）" };
+  if (!bin)
+    return {
+      bin: null,
+      error: `cswap 未找到（cswapStatus.path、~/.local/bin/cswap 或 PATH）${vscode.env.remoteName ? "；远程窗口要在“远程”设置里填 cswapStatus.path" : ""}`,
+    };
   const r = await exec(bin, ["policy", "list", "--json"], { timeout: 20000 });
   if (r.timedOut) return { bin, error: "cswap policy list 超时（20 秒）" };
   const start = r.out.indexOf("{");

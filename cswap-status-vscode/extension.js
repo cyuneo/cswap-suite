@@ -21,6 +21,7 @@ const accounts = require("./lib/accounts");
 const accountsView = require("./lib/accountsView");
 const accountsWeb = require("./lib/accountsWeb");
 const accountsList = require("./lib/accountsList");
+const accountsMode = require("./lib/accountsMode");
 const autoswitch = require("./lib/autoswitch");
 const satellite = require("./lib/satellite");
 const manage = require("./lib/manage");
@@ -63,6 +64,8 @@ function schedule() {
 function activate(context) {
   runtime.extPath = context.extensionPath;
   if (context.logUri) accountsWeb.setLogDir(context.logUri.fsPath);
+  if (context.globalStorageUri) accountsList.setIconDir(require("path").join(context.globalStorageUri.fsPath, "ring-icons"));
+  accountsMode.apply();
   runtime.refreshAccounts = refreshAccounts;
   runtime.refreshApi = refreshApi;
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
@@ -107,6 +110,7 @@ function activate(context) {
     cmd("cswapStatus.apiDispatch", apiView.dispatchTask),
     cmd("cswapStatus.apiOpenResult", apiView.openTaskResult),
     cmd("cswapStatus.apiCancel", apiView.cancelTask),
+    cmd("cswapStatus.apiClose", apiView.closeTask),
     cmd("cswapStatus.apiOpenSession", apiView.openSession),
     cmd("cswapStatus.apiCollect", apiView.collectTask),
     cmd("cswapStatus.apiKeyAdd", apiView.addKey),
@@ -114,6 +118,7 @@ function activate(context) {
     cmd("cswapStatus.apiKeyRemove", apiView.removeKey),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration("cswapStatus")) return;
+      if (e.affectsConfiguration("cswapStatus.accountsStyle")) accountsMode.apply();
       // a changed path setting must take effect without a window reload
       proc.resetBins();
       api.reset();

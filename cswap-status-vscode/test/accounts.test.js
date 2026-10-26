@@ -95,25 +95,74 @@ const menu = (c) =>
   assert.match(logged, /resolve: visible=/);
   assert.match(logged, /ready: 10 chars, 0px tall/);
   assert.match(logged, /pageError: boom/);
-  // a page that never says "ready": logged, and one offer to switch to the list
+  // which 账号 view shows: cards until a window's page fails to load ("auto")
+  const mode = require("../lib/accountsMode");
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], false, "cards at activation");
+  // auto: a page that never says "ready" is logged, and this window switches
+  // to the list by itself (no question, no setting changed)
   const stuck = new web.AccountsView({ readyWaitMs: 20 });
-  answers.warn.push("改用列表显示");
   stuck.resolveWebviewView(stub.fakeWebviewView());
   await stub.sleep(60);
   assert.match(require("fs").readFileSync(require("path").join(logDir, "accounts-view.log"), "utf8"), /no-ready/);
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], true);
+  assert.match(shown.status[shown.status.length - 1], /改用列表显示/);
+  assert.strictEqual(stub.configUpdates.length, 0);
+  // "rings": the cards stay, and one offer to switch to the list
+  mode._reset();
+  stub.config.accountsStyle = "rings";
+  await mode.apply();
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], false);
+  answers.warn.push("改用列表显示");
+  new web.AccountsView({ readyWaitMs: 20 }).resolveWebviewView(stub.fakeWebviewView());
+  await stub.sleep(60);
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], false);
   assert.match(shown.warn[shown.warn.length - 1], /账号面板没有加载出来/);
   await stub.sleep(10);
   assert.deepStrictEqual(stub.configUpdates[stub.configUpdates.length - 1].slice(0, 2), ["accountsStyle", "list"]);
+  await mode.apply();
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], true, "list");
+  stub.config.accountsStyle = "rings";
   const warns = shown.warn.length;
   new web.AccountsView({ readyWaitMs: 20 }).resolveWebviewView(stub.fakeWebviewView());
   await stub.sleep(60);
   assert.strictEqual(shown.warn.length, warns, "offered once per window");
-  // a page that loads in time: no warning
+  // an unknown value counts as auto
+  stub.config.accountsStyle = "bogus";
+  assert.strictEqual(mode.style(), "auto");
+  // a page that loads in time: no timer left
   const fine = new web.AccountsView({ readyWaitMs: 20 });
   const fv = stub.fakeWebviewView();
   fine.resolveWebviewView(fv);
   fine.onMessage({ type: "ready", size: "" });
   assert.strictEqual(fine.timer, null);
+  // only time on screen counts: hidden before it loaded is not a failure, and
+  // shown again is a new page load that is watched again
+  mode._reset();
+  stub.config.accountsStyle = "auto";
+  await mode.apply();
+  fv.setVisible(false);
+  assert.strictEqual(fine.timer, null);
+  const hidden = new web.AccountsView({ readyWaitMs: 20 });
+  const hv = stub.fakeWebviewView();
+  hidden.resolveWebviewView(hv);
+  hv.setVisible(false);
+  await stub.sleep(60);
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], false, "hidden: no fallback");
+  hv.setVisible(true);
+  await stub.sleep(60);
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], true, "blank again after showing it: the list");
+  // a "ready" already waiting when the timer fires wins
+  mode._reset();
+  await mode.apply();
+  const late = new web.AccountsView({ readyWaitMs: 5 });
+  late.resolveWebviewView(stub.fakeWebviewView());
+  const until = Date.now() + 30;
+  while (Date.now() < until); // the extension host is busy past the deadline
+  setImmediate(() => late.onMessage({ type: "ready", size: "" }));
+  await stub.sleep(30);
+  assert.strictEqual(stub.contexts["cswapStatus.accountsList"], false, "late ready: still the cards");
+  mode._reset();
+  await mode.apply();
   delete stub.config.accountsStyle;
   stub.configUpdates.length = 0;
   web.setLogDir(null);
@@ -191,7 +240,7 @@ const menu = (c) =>
   assert.deepStrictEqual(menu(c["2"]), ["accountAlias", "accountLimits", "accountReserveOn", "accountEnable", "accountRelogin", "accountRemove"]);
   assert.deepStrictEqual(menu(c["4"]), ["switchAccount", "accountAlias", "accountLimits", "accountReserveOn", "accountDisable", "accountRelogin", "accountRemove"]);
 
-  // the same accounts as a plain list (cswapStatus.accountsStyle = list),
+  // the same accounts as a list (cswapStatus.accountsStyle list, or auto after a failed page),
   // with the same right-click items as the cards, and 切换 inline where the
   // card has its button
   const L = require("../lib/accountsList");
@@ -202,7 +251,31 @@ const menu = (c) =>
   assert.strictEqual(byNum["3"].label, "#3 c@x");
   assert.strictEqual(byNum["3"].description, "5h 99/98% · 7d 20/98% · 当前 · 到上限");
   assert.strictEqual(byNum["5"].description, "5h 60/70% · 7d 10/98% · 不在时段");
+  // no icon folder: theme icons; with one: a light and a dark ring picture
   assert.strictEqual(byNum["2"].iconPath.id, "circle-slash");
+  const iconDir = path.join(tmp, "icons");
+  L.setIconDir(iconDir);
+  const withIcons = Object.fromEntries(new L.AccountsList().getChildren().slice(1).map((r) => [r.accountNumber, r]));
+  assert.match(withIcons["3"].iconPath.light, /ring-[0-9a-f]+\.svg$/);
+  const darkSvg = fs.readFileSync(withIcons["3"].iconPath.dark, "utf8");
+  assert.match(darkSvg, /stroke="#f14c4c"[^>]*stroke-dasharray="99.0 100"/, "5h at its line: red");
+  assert.match(fs.readFileSync(withIcons["2"].iconPath.light, "utf8"), /opacity="0.5"/, "disabled: faded");
+  assert.notStrictEqual(withIcons["3"].iconPath.dark, withIcons["4"].iconPath.dark);
+  // a half-written icon is written again; old icons and leftovers are pruned
+  const ring = require("../lib/ringIcon");
+  fs.writeFileSync(withIcons["3"].iconPath.dark, "<svg");
+  new L.AccountsList().getChildren();
+  assert.strictEqual(fs.readFileSync(withIcons["3"].iconPath.dark, "utf8"), darkSvg);
+  const leftover = path.join(iconDir, "ring-0123456789abcdef.svg.99.tmp");
+  fs.writeFileSync(leftover, "x");
+  const old = new Date(Date.now() - 3 * 86400e3);
+  fs.utimesSync(withIcons["2"].iconPath.light, old, old);
+  fs.utimesSync(leftover, old, old);
+  ring.prune(iconDir);
+  assert.ok(!fs.existsSync(withIcons["2"].iconPath.light) && !fs.existsSync(leftover));
+  assert.ok(fs.existsSync(withIcons["3"].iconPath.dark));
+  assert.ok(!fs.readdirSync(iconDir).some((n) => n.endsWith(".tmp")));
+  L.setIconDir(null);
   function listWhen(expr, item) {
     return expr.split("&&").every((part) => {
       const p = part.trim();
@@ -218,13 +291,14 @@ const menu = (c) =>
       .map((m) => m.command.replace("cswapStatus.", ""));
   for (const n of Object.keys(c)) {
     assert.deepStrictEqual(listMenu(byNum[n], false), menu(c[n]), `#${n} right-click`);
-    assert.strictEqual(listMenu(byNum[n], true).length === 1, c[n].html.includes('data-cmd="switch"'), `#${n} inline 切换`);
+    const buttons = [...c[n].html.matchAll(/data-cmd="(switch|relogin)"/g)].map((m) => (m[1] === "switch" ? "switchAccount" : "accountRelogin"));
+    assert.deepStrictEqual(listMenu(byNum[n], true), buttons, `#${n} inline button`);
   }
   // the two 账号 views are never shown together, and share the title buttons
   const views = pkg.contributes.views.cswap;
   assert.deepStrictEqual(views.slice(0, 2).map((v) => [v.id, v.when]), [
-    ["cswapStatus.accounts", "config.cswapStatus.accountsStyle != list"],
-    ["cswapStatus.accountsList", "config.cswapStatus.accountsStyle == list"],
+    ["cswapStatus.accounts", "!cswapStatus.accountsList"],
+    ["cswapStatus.accountsList", "cswapStatus.accountsList"],
   ]);
   for (const t of pkg.contributes.menus["view/title"].filter((m) => m.when.includes("cswapStatus.accounts"))) {
     assert.ok(t.when.includes("cswapStatus.accountsList"), t.command);

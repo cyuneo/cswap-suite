@@ -2,7 +2,7 @@
   "name": "cswap-status",
   "displayName": "cswap Status",
   "description": "cswap 侧栏（活动栏图标）：当前机器、每个 claude-swap 账号的 5 小时/7 天用量圆环和一键切换、主账号、cswap 自动切换在做什么（阈值、当前结论、下一个账号、切换记录、暂停/恢复）、api-worker 每个 Console API key 的本月花费和任务；精简的状态栏条目；为所有账号保持 Claude Code 的 Dynamic workflows（Ultracode）开启；在 tmux 里启动 Claude 方便手机操作（cswap-remote）。",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "publisher": "chenyu",
   "license": "MIT",
   "engines": {
@@ -111,6 +111,11 @@
         "category": "API worker"
       },
       {
+        "command": "cswapStatus.apiClose",
+        "title": "标记为已结束",
+        "category": "API worker"
+      },
+      {
         "command": "cswapStatus.apiOpenSession",
         "title": "打开云端会话",
         "category": "API worker"
@@ -159,7 +164,8 @@
       {
         "command": "cswapStatus.accountRelogin",
         "title": "重新登录…",
-        "category": "cswap"
+        "category": "cswap",
+        "icon": "$(sign-in)"
       },
       {
         "command": "cswapStatus.accountRemove",
@@ -243,15 +249,17 @@
         "cswapStatus.accountsStyle": {
           "type": "string",
           "enum": [
+            "auto",
             "rings",
             "list"
           ],
           "enumDescriptions": [
-            "每个账号一张卡片，5h / 7d 用量画成圆环（网页面板）",
-            "每个账号一行文字（VS Code 自带的列表）：网页面板加载不出来时用这个"
+            "先用圆环卡片；某个窗口的网页面板加载不出来时，那个窗口自动改用列表（新窗口会再试圆环）",
+            "总是圆环卡片（网页面板）。加载不出来时提示一次",
+            "总是列表（VS Code 自带的列表，每行一个小圆环图标），不依赖网页面板"
           ],
-          "default": "rings",
-          "description": "账号面板的样式。网页面板在某些窗口里加载不出来（VS Code 的问题）时，改成 list。"
+          "default": "auto",
+          "description": "账号面板的样式。"
         }
       }
     },
@@ -261,12 +269,12 @@
           "type": "webview",
           "id": "cswapStatus.accounts",
           "name": "账号",
-          "when": "config.cswapStatus.accountsStyle != list"
+          "when": "!cswapStatus.accountsList"
         },
         {
           "id": "cswapStatus.accountsList",
           "name": "账号",
-          "when": "config.cswapStatus.accountsStyle == list"
+          "when": "cswapStatus.accountsList"
         },
         {
           "id": "cswapStatus.auto",
@@ -379,6 +387,11 @@
           "group": "1@4"
         },
         {
+          "command": "cswapStatus.apiClose",
+          "when": "view == cswapStatus.api && viewItem =~ /^apiTask\\.cloud\\.(cloud|running)$/",
+          "group": "1@5"
+        },
+        {
           "command": "cswapStatus.apiKeyAdd",
           "when": "view == cswapStatus.api && viewItem == apiKeys",
           "group": "inline"
@@ -440,7 +453,12 @@
         },
         {
           "command": "cswapStatus.switchAccount",
-          "when": "view == cswapStatus.accountsList && viewItem =~ /kind-other/ && !(viewItem =~ /limit/)",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /kind-other/ && !(viewItem =~ /limit|relogin/)",
+          "group": "inline"
+        },
+        {
+          "command": "cswapStatus.accountRelogin",
+          "when": "view == cswapStatus.accountsList && viewItem =~ /relogin/",
           "group": "inline"
         }
       ],
@@ -502,6 +520,10 @@
         },
         {
           "command": "cswapStatus.apiCancel",
+          "when": "false"
+        },
+        {
+          "command": "cswapStatus.apiClose",
           "when": "false"
         },
         {

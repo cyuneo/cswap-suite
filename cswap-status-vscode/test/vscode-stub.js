@@ -142,7 +142,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // postMessage calls; `send(msg)` is a message from the page's script.
 function fakeWebviewView() {
   const handlers = [];
+  const shownHandlers = [];
   return {
+    visible: true,
+    onDidChangeVisibility(fn) {
+      shownHandlers.push(fn);
+      return { dispose() {} };
+    },
+    setVisible(v) {
+      this.visible = v;
+      shownHandlers.forEach((fn) => fn());
+    },
     webview: {
       options: {},
       html: "",

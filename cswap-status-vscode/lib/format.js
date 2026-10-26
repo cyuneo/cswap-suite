@@ -223,7 +223,7 @@ function mmss(sec) {
 
 // ---- api-worker tasks
 
-const API_DONE = new Set(["done", "failed", "cancelled", "lost"]);
+const API_DONE = new Set(["done", "failed", "cancelled", "lost", "closed"]);
 // "launching": a cloud session that is still being started
 const isRunning = (t) => t.state === "queued" || t.state === "running" || t.state === "launching";
 // api-worker sends `final` per task; older ones only the state.
@@ -237,7 +237,9 @@ const TASK_STATE_ZH = {
   failed: "失败",
   cancelled: "已停止",
   lost: "丢失",
-  cloud: "云端进行中",
+  // a cloud session that cannot report back here (no git remote): only its page knows
+  cloud: "已交给云端（无法跟踪）",
+  closed: "已标记结束",
 };
 const taskStateZh = (s) => TASK_STATE_ZH[s] || s || "";
 

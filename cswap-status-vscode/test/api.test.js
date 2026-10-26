@@ -102,6 +102,32 @@ const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((
   assert.match(doc, /## 报告\n\nAll good\./);
   assert.deepStrictEqual(worker.calls().pop().argv, ["result", "t22222222"]);
 
+  // a cloud session that cannot report back is not "in progress"; the user
+  // marks it ended, and that is not announced back to them
+  assert.strictEqual(T.format.taskStateZh("cloud"), "已交给云端（无法跟踪）");
+  worker.set({ result: { out: { id: "t22222222", kind: "cloud", title: "cloud job", state: "cloud", final: false, result: null } } });
+  await T.openTaskResult("t22222222");
+  assert.doesNotMatch(shown.docs.pop(), /还没做完/);
+  const untracked = { ...LIST.tasks[1], state: "cloud", final: false };
+  worker.set({ list: { out: { ...LIST, tasks: [untracked] } }, close: { out: { id: "t22222222", state: "closed" } } });
+  await T.refreshApi();
+  const closeTree = new T.ApiTree();
+  const [, , recentGroup] = closeTree.getChildren();
+  const [untrackedRow] = closeTree.getChildren(recentGroup);
+  assert.strictEqual(untrackedRow.contextValue, "apiTask.cloud.cloud");
+  const warns = shown.warn.length;
+  worker.set({ list: { out: { ...LIST, tasks: [{ ...untracked, state: "closed", final: true }] } }, close: { out: { id: "t22222222", state: "closed" } } });
+  await T.apiView.closeTask(untrackedRow);
+  assert.ok(worker.calls().some((c) => c.argv.join(" ") === "close t22222222"));
+  assert.strictEqual(shown.warn.length, warns);
+  const pkg = require("../package.json");
+  const closeMenu = pkg.contributes.menus["view/item/context"].find((m) => m.command === "cswapStatus.apiClose");
+  const re = new RegExp(closeMenu.when.match(/viewItem =~ \/(.+)\/$/)[1]);
+  assert.deepStrictEqual(
+    ["apiTask.cloud.cloud", "apiTask.cloud.running", "apiTask.cloud.done", "apiTask.cloud.closed", "apiTask.api.running"].map((v) => re.test(v)),
+    [true, true, false, false, false]
+  );
+
   // dispatch: the prompt (even one starting with a dash) goes on stdin, not argv
   worker.set({ start: { out: { id: "t44444444", key: "gmail", branch: null } }, list: { out: LIST } });
   answers.input.push("-x rewrite the parser", "3");

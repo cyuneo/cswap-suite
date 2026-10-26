@@ -16,6 +16,7 @@ const API_ICON = {
   cancelled: "circle-slash",
   lost: "question",
   cloud: "cloud",
+  closed: "check",
 };
 const iconOf = (t) => API_ICON[t.state] || "circle-outline";
 
@@ -77,6 +78,7 @@ function render() {
 
 function announce(finished) {
   for (const t of finished) {
+    if (t.state === "closed") continue; // the user marked it ended just now
     const fn = t.state === "done" ? vscode.window.showInformationMessage : vscode.window.showWarningMessage;
     fn(`${t.kind === "cloud" ? "云端任务" : "API 任务"} ${t.id} ${taskStateZh(t.state)}：${t.title || ""}`, "查看结果").then((c) => {
       if (c) openTaskResult(t.id);
@@ -219,7 +221,15 @@ async function openTaskResult(arg) {
   if (t.outputs && t.outputs.length) lines.push("", "## 输出文件", "", ...t.outputs.map((o) => `- ${o}`));
   if (t.commits && t.commits.length) lines.push("", "## 提交", "", "```", ...t.commits, "```");
   if (t.diffStat) lines.push("", "## 改动", "", "```", t.diffStat, "```");
-  lines.push("", "## 报告", "", t.result || (isFinal(t) ? "（没有报告）" : "（任务还没做完）"));
+  const noReport =
+    t.state === "cloud"
+      ? "（已交给云端，这里无法跟踪它是否做完：到会话页面查看；做完后可以在侧栏右键“标记为已结束”）"
+      : t.state === "closed"
+        ? "（已标记结束，结果在会话页面）"
+        : isFinal(t)
+          ? "（没有报告）"
+          : "（任务还没做完）";
+  lines.push("", "## 报告", "", t.result || noReport);
   const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: lines.join("\n") });
   await vscode.window.showTextDocument(doc, { preview: true });
 }
@@ -231,6 +241,16 @@ async function cancelTask(arg) {
   if (ok !== "停止") return;
   const r = await api.run(["cancel", id]);
   if (r.code !== 0) vscode.window.showErrorMessage(r.err || "停止失败");
+  refresh();
+}
+
+// A cloud session runs on claude.ai and may never report back here; the user
+// says when it has ended.
+async function closeTask(arg) {
+  const id = taskIdOf(arg);
+  if (!id) return;
+  const r = await api.run(["close", id]);
+  if (r.code !== 0) vscode.window.showErrorMessage(r.err || "标记失败");
   refresh();
 }
 
@@ -405,6 +425,7 @@ module.exports = {
   ApiTree,
   openTaskResult,
   cancelTask,
+  closeTask,
   openSession,
   collectTask,
   dispatchTask,
