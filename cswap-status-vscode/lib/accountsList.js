@@ -32,14 +32,28 @@ function contextValue(r) {
     .join(" ");
 }
 
-function windowText(label, used, max) {
-  return `${label} ${f.pct(used)}${max === null || max === undefined ? "" : `/${f.pct(max)}`}%`;
+// "5h 27/40%": the account's own line after the slash; the shared threshold
+// is on the row above, so "5h 27%" (older cswap does not say which: shown)
+function windowText(label, used, max, source) {
+  const line = max !== null && max !== undefined && source !== "threshold";
+  return `${label} ${f.pct(used)}${line ? `/${f.pct(max)}` : ""}%`;
 }
 
-function accountItem(r, now) {
+// A row is narrow: an email shows as the part before the @, unless another
+// account shares it (the full address is in the tooltip).
+function shortName(r, rows) {
+  const name = String(r.name || r.email || "?");
+  const at = name.indexOf("@");
+  if (at <= 0) return name;
+  const local = name.slice(0, at);
+  const same = (rows || []).filter((o) => String(o.name || o.email || "").split("@")[0] === local);
+  return same.length > 1 ? name : local;
+}
+
+function accountItem(r, now, rows) {
   const st = f.rowState(r);
   const name = r.name || r.email || "?";
-  const it = new vscode.TreeItem(`${r.number ? `#${r.number} ` : ""}${name}`);
+  const it = new vscode.TreeItem(`${r.number ? `#${r.number} ` : ""}${shortName(r, rows)}`);
   it.accountNumber = r.number ? String(r.number) : "";
   it.contextValue = contextValue(r);
   const tags = [];
@@ -51,7 +65,7 @@ function accountItem(r, now) {
     if (back) tags.push(back);
   } else if (!["active", "ready", "reserve"].includes(st)) tags.push(f.statusZh(r));
   if (r.lastError) tags.push("读取用量失败");
-  it.description = [windowText("5h", r.usage5h, r.max5h), windowText("7d", r.usage7d, r.max7d), ...tags].join(" · ");
+  it.description = [windowText("5h", r.usage5h, r.max5h, r.max5hSource), windowText("7d", r.usage7d, r.max7d, r.max7dSource), ...tags].join(" · ");
   const files = ringIcon.iconFiles(iconDir, r, !cardContext(r).cswapOn);
   if (files) it.iconPath = { light: vscode.Uri.file(files.light), dark: vscode.Uri.file(files.dark) };
   else
@@ -59,6 +73,7 @@ function accountItem(r, now) {
       r.lastError || r.quarantined ? "warning" : st === "limit" ? "error" : st === "disabled" ? "circle-slash" : r.active ? "pass-filled" : "account"
     );
   it.tooltip = [
+    name,
     r.email && r.email !== name && r.email,
     f.accountDetail(r),
     r.reason,
@@ -99,7 +114,7 @@ class AccountsList {
     }
     if (!state.rows.length) out.push(plainItem("还没有账号：点这里添加", "add", "cswapStatus.addAccount"));
     ringIcon.pruneNow(iconDir);
-    for (const r of state.rows) out.push(accountItem(r, now));
+    for (const r of state.rows) out.push(accountItem(r, now, state.rows));
     const note = satellite.syncNote();
     if (note) out.push(plainItem(note, "warning"));
     return out;

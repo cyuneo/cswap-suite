@@ -248,7 +248,13 @@ const menu = (c) =>
   assert.deepStrictEqual(rows[0].label, "阈值 98%");
   assert.deepStrictEqual(rows[0].command.command, "cswapStatus.autoThreshold");
   const byNum = Object.fromEntries(rows.slice(1).map((r) => [r.accountNumber, r]));
-  assert.strictEqual(byNum["3"].label, "#3 c@x");
+  // a narrow row: the name before the @ (unless two share it), the full one in the tooltip
+  assert.strictEqual(byNum["3"].label, "#3 c");
+  assert.match(byNum["3"].tooltip, /^c@x\n/);
+  assert.strictEqual(L.accountItem({ number: "9", name: "c@y", usage5h: 1, usage7d: 2 }, 0, [{ name: "c@x" }, { name: "c@y" }]).label, "#9 c@y");
+  // the shared threshold is on the row above; only an account's own line after the slash
+  const own = L.accountItem({ number: "9", name: "z@x", usage5h: 27, max5h: 40, max5hSource: "own", usage7d: 80, max7d: 98, max7dSource: "threshold" }, 0, []);
+  assert.strictEqual(own.description, "5h 27/40% · 7d 80%");
   assert.strictEqual(byNum["3"].description, "5h 99/98% · 7d 20/98% · 当前 · 到上限");
   assert.strictEqual(byNum["5"].description, "5h 60/70% · 7d 10/98% · 不在时段");
   // no icon folder: theme icons; with one: a light and a dark ring picture
