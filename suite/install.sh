@@ -76,11 +76,14 @@ prune "$prefix"/cyuneo-agent-monitor-*.vsix
 # (ssh, or a terminal whose VS Code window is gone) the newest VS Code Server
 # on this machine, which installs into the same place. Empty: neither works.
 code_cli() {
-  if command -v code >/dev/null && code --list-extensions >/dev/null 2>&1; then
-    echo code
-    return
+  local out server
+  # The remote-cli `code` outside a VS Code terminal only says so, and exits 0
+  if command -v code >/dev/null && out="$(code --list-extensions 2>&1)"; then
+    case "$out" in
+      *"only available in"*) ;;
+      *) echo code; return ;;
+    esac
   fi
-  local server
   # shellcheck disable=SC2012 # names are hashes: newest by time
   server="$(ls -dt "$HOME"/.vscode-server/cli/servers/Stable-*/server/bin/code-server 2>/dev/null | head -1 || true)"
   if [ -n "$server" ] && env -u VSCODE_IPC_HOOK_CLI "$server" --list-extensions >/dev/null 2>&1; then
@@ -219,11 +222,14 @@ service() { # name, wanted, command to run by hand without systemd
   fi
 }
 service cswap-auto "$auto" "cswap auto"
-# An old crontab line running `cswap auto --once` next to the service is a
-# second engine: switches it makes come and go between the service's ticks.
-cron_engines="$(crontab -l 2>/dev/null | grep -v '^[[:space:]]*#' | grep -c 'cswap auto' || true)"
-if [ "${cron_engines:-0}" != 0 ]; then
-  echo "注意：crontab 里还有一行在运行 cswap auto（第二个自动切换）。运行 crontab -e 删掉它，自动切换只留后台服务 cswap-auto。"
+# An old crontab line running `cswap auto --once` next to the running service
+# is a second engine: switches it makes come and go between the service's
+# ticks. Without the service, that line may be the only engine: no word then.
+if have_systemd && systemctl --user is-active --quiet cswap-auto.service; then
+  cron_engines="$(crontab -l 2>/dev/null | grep -v '^[[:space:]]*#' | grep -c 'cswap auto' || true)"
+  if [ "${cron_engines:-0}" != 0 ]; then
+    echo "注意：crontab 里还有一行在运行 cswap auto（第二个自动切换）。运行 crontab -e 删掉它，自动切换只留后台服务 cswap-auto。"
+  fi
 fi
 service cswap-remote "$remote" "cswap-remote serve --host tailscale"
 

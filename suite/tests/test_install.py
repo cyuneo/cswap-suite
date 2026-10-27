@@ -79,6 +79,9 @@ class InstallTests(unittest.TestCase):
         script(b / "api-worker" / "install.sh", '#!/bin/sh\n[ -z "$FAKE_API_FAIL" ] || { echo "no network" >&2; exit 1; }\n')
         (b / "systemd").mkdir()
         script(self.fakebin / "uv", FAKE_UV)
+        # systemd only with FAKE_SYSTEMD; cswap-auto running only with FAKE_AUTO_ACTIVE
+        script(self.fakebin / "systemctl", '#!/bin/sh\n[ -n "$FAKE_SYSTEMD" ] || exit 1\ncase "$*" in\n'
+               '  *is-active*cswap-auto*) [ -n "$FAKE_AUTO_ACTIVE" ] ;;\n  *is-active*) exit 3 ;;\n  *) exit 0 ;;\nesac\n')
         script(self.fakebin / "crontab", '#!/bin/sh\n[ "$1" = -l ] && [ -n "$FAKE_CRONTAB" ] && printf "%s\\n" "$FAKE_CRONTAB" && exit 0\nexit 1\n')
         self.state = t / "vscode-state"
         self.code = self.fakebin / "code"
@@ -163,10 +166,27 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(self.installed()["chenyu.cswap-status"], "0.13.1")
 
     def test_warns_about_a_second_engine_in_crontab(self):
-        out = self.run_install(FAKE_CRONTAB="* * * * * $HOME/.local/bin/cswap auto --once >> x 2>&1")
+        cron = "* * * * * $HOME/.local/bin/cswap auto --once >> x 2>&1"
+        out = self.run_install(FAKE_CRONTAB=cron, FAKE_SYSTEMD="1", FAKE_AUTO_ACTIVE="1")
         self.assertIn("crontab 里还有一行在运行 cswap auto", out)
-        out = self.run_install(FAKE_CRONTAB="# * * * * * cswap auto --once\n0 3 * * * backup")
+        out = self.run_install(FAKE_CRONTAB="# * * * * * cswap auto --once\n0 3 * * * backup",
+                               FAKE_SYSTEMD="1", FAKE_AUTO_ACTIVE="1")
         self.assertNotIn("crontab 里还有", out)
+
+    def test_a_crontab_engine_without_the_service_is_left_alone(self):
+        # then the cron line is the only automatic switching there is
+        cron = "* * * * * cswap auto --once"
+        self.assertNotIn("crontab 里还有", self.run_install(FAKE_CRONTAB=cron))
+        self.assertNotIn("crontab 里还有", self.run_install(FAKE_CRONTAB=cron, FAKE_SYSTEMD="1"))
+
+    def test_a_code_that_only_works_in_a_vscode_terminal_falls_back(self):
+        # the remote-cli `code` without VSCODE_IPC_HOOK_CLI prints this and exits 0
+        script(self.code, "#!/bin/sh\necho 'Command is only available in WSL or inside a Visual Studio Code terminal.'\n")
+        server = self.home / ".vscode-server/cli/servers/Stable-aaa/server/bin/code-server"
+        script(server, FAKE_CODE)
+        out = self.run_install()
+        self.assertEqual(self.installed()["chenyu.cswap-status"], "0.13.1", out)
+        self.assertTrue(all(c.startswith("code-server ") for c in self.calls()))
 
     def test_running_it_again_is_fine(self):
         self.run_install()
