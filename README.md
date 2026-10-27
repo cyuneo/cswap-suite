@@ -1,118 +1,69 @@
-# cswap 套装：Claude Code 多账号工具集
+# cswap suite
 
-> A local toolkit around [claude-swap](https://github.com/cyuneo/claude-swap) for people who use several of their own Claude Code accounts: automatic switching with per-account limits, a VS Code side bar, a phone page and a background API worker. Everything runs and stays on your machine. The documentation is in Chinese.
+**English** | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
-给自己有几个 Claude Code 账号的人用的一组本地工具，围绕 claude-swap（cswap）：
+A set of local tools for people who use several of their own Claude Code accounts. It is built around [claude-swap](https://github.com/cyuneo/claude-swap) (`cswap`), which switches the account Claude Code is logged in to, and adds:
 
-- **自动切换**：当前账号快到用量上限时，换到余量多的账号。可以给每个账号设个人上限、使用时段，或设成主账号（其他账号都用完才用它）。
-- **VS Code 侧栏**：每个账号的用量圆环，自动切换的状态和开关，API Worker 的任务和花费。
-- **手机网页**（cswap-remote）：看会话、回答权限提示、切账号。
-- **API Worker**（Claude Code 插件）：把后台任务交给 Console API key 计费的 worker，或者开一个云端会话。
-- **Agent Monitor**（VS Code 插件，在[另一个仓库](https://github.com/cyuneo/cyuneo-agent-monitor)）：看所有会话；额度恢复或换号后，自动续跑停下的对话。
+- **Automatic switching.** When the active account gets close to its usage limit, cswap moves to the account with the most room left. Each account can have its own limits and hours, and one account can be kept in reserve, used only when the others are out.
+- **A VS Code side bar.** Usage rings for every account, the auto-switch status with pause and resume, and the API worker's tasks and spending.
+- **A phone page** (cswap-remote). See your sessions, answer permission prompts and switch accounts from your phone, over your own Tailscale network.
+- **An API worker** (a Claude Code plugin). Hand background tasks to a worker billed to your Console API key, or start a cloud session. It has an on/off switch, per-task budgets and a monthly cap.
+- **Agent Monitor** (a VS Code extension, in [its own repository](https://github.com/cyuneo/cyuneo-agent-monitor)). Watch all your sessions; when a chat stops at a usage limit, it is resumed after the limit resets or cswap switches accounts.
 
-配置、登录凭据和日志都只在本机：不上传令牌，没有远程账号池，也不和别人共享账号。
+Everything stays on your machine: settings, logins and logs are never uploaded. There is no remote account pool, and accounts are not shared with anyone.
 
-## 安装
+## Requirements
 
-需要 Linux（Ubuntu 上测试过；后台服务用 systemd 用户服务），装好 Claude Code 和 [uv](https://docs.astral.sh/uv/)。从 [Releases](https://github.com/cyuneo/cswap-suite/releases) 下载 `cswap-suite.tar.gz`：
+- Linux. Tested on Ubuntu; the background services use systemd user services.
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
+- VS Code, for the side bar and Agent Monitor (optional).
+
+## Install
+
+Download `cswap-suite.tar.gz` from [Releases](https://github.com/cyuneo/cswap-suite/releases), then:
 
 ```bash
 tar xzf cswap-suite.tar.gz
-./cswap-suite/install.sh          # 加 --auto：自动切换作为后台服务一直运行
+./cswap-suite/install.sh          # add --auto to keep auto-switching running as a background service
 ```
 
-加账号、安装选项、更新方法见 [suite/README.md](suite/README.md)。
+- It installs into `~/.local/share/cswap-suite`, with the commands in `~/.local/bin`. The unpacked folder can be deleted afterwards.
+- To update, install a newer bundle the same way, or run `~/.local/share/cswap-suite/install.sh`. Running services restart on the new version.
+- Options: `--auto` (auto-switch service), `--remote` (phone page service), `--no-api-worker`, `--no-vscode`, `--no-monitor`, `--force-vscode` (install the bundled extensions even over newer ones). `./install.sh --help` lists them.
+- For the services to run while you are logged out, run `loginctl enable-linger` once.
 
-## 仓库
+## Adding accounts
 
-| 仓库 | 内容 |
+- **On this machine:** click ＋ in the cswap side bar in VS Code, or log in to Claude Code in a terminal and run `cswap add`.
+- **On another computer that should not log in itself:** use the accounts of a machine that is logged in, through long-lived setup tokens, with usage synced over SSH: `cswap-satellite setup --server <host>`, then `cswap-satellite install-timer`. See [cswap-satellite/README.md](cswap-satellite/README.md) (in Chinese).
+
+## What is in this repository
+
+| Folder | What it is |
 | --- | --- |
-| [cyuneo/cswap-suite](https://github.com/cyuneo/cswap-suite)（这里） | VS Code 侧栏 cswap-status、api-worker、cswap-remote、cswap-satellite、cswap-hooks、安装包 |
-| [cyuneo/claude-swap](https://github.com/cyuneo/claude-swap) | 我们维护的 cswap，fork 自 [realiti4/claude-swap](https://github.com/realiti4/claude-swap)，多了个人上限、自动切换的状态和暂停、切换后钩子等 |
+| [cswap-status-vscode/](cswap-status-vscode/) | The VS Code extension: the cswap side bar and status bar |
+| [api-worker/](api-worker/) | The Claude Code plugin for background tasks on your API key or in the cloud |
+| [cswap-remote/](cswap-remote/) | The phone page |
+| [cswap-satellite/](cswap-satellite/) | Using the accounts from other computers through setup tokens |
+| [cswap-hooks/](cswap-hooks/) | What runs after every switch: keeps the reasoning effort the same and writes a log line |
+| [suite/](suite/) | The installer, the bundle builder and the tests |
+
+Related repositories:
+
+| Repository | What it is |
+| --- | --- |
+| [cyuneo/claude-swap](https://github.com/cyuneo/claude-swap) | Our cswap: a fork of [realiti4/claude-swap](https://github.com/realiti4/claude-swap) with per-account limits, auto-switch status and pause, and switch hooks |
 | [cyuneo/cyuneo-agent-monitor](https://github.com/cyuneo/cyuneo-agent-monitor) | Agent Monitor |
 
-## 许可证
+The detailed documentation of each part is in Chinese, in its folder. Notes for maintainers are in [docs/MAINTAINING.md](docs/MAINTAINING.md) and [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
-本仓库用 [PolyForm Noncommercial 1.0.0](LICENSE)：可以使用、修改、分享，但不能用于商业用途。用到的第三方项目和它们的许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+## License
 
-## 致谢
+[PolyForm Noncommercial 1.0.0](LICENSE): you may use, change and share it, but not for commercial purposes. Third-party projects and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-- [claude-swap](https://github.com/realiti4/claude-swap)（Onur Cetinkol，MIT）：这里的 cswap 在它的基础上修改，保留原项目的许可证。
-- 开发过程中借助了 Claude Code 编写和审查代码。
+## Acknowledgements
 
-Claude 和 Claude Code 是 Anthropic 的产品；本项目只是配合它们使用的个人工具，与 Anthropic 没有关联。
+- [claude-swap](https://github.com/realiti4/claude-swap) by Onur Cetinkol (MIT): our cswap is a modified version of it, under its original license.
+- Claude Code helped write and review the code.
 
----
-
-下面是维护说明。
-
-这里是源码。装好的副本在 `~/.local/share/cswap-suite`，改这里的文件不会直接影响正在运行的服务。
-
-## 改代码之后
-
-```bash
-suite/test.sh                          # 全部测试（约 1 分钟）
-git add -A && git commit               # claude-swap/、agent-monitor/ 是各自的仓库（克隆到这两个文件夹），另外提交
-python3 suite/build.py --install       # 先跑测试，再打包，再装到这台机器（重启正在运行的服务）
-```
-
-VS Code 插件装好后要重载窗口；Claude Code 的 api-worker 插件要重开 Claude Code。推送到 GitHub、发安装包见 [docs/PUBLISHING.md](docs/PUBLISHING.md)（推送前先跑 `suite/check-public.sh`）。
-
-## 各部分
-
-| 文件夹 | 是什么 | 怎么运行 |
-| --- | --- | --- |
-| [claude-swap/](claude-swap/) | 我们自己维护的 cswap，源自 realiti4/claude-swap（MIT 许可）。仓库 cyuneo/claude-swap，分支 `chenyu-account-policy`，合并过原项目到 c896cdd。比原项目多了：个人上限 `cswap policy`、切换后钩子、自动切换状态文件、暂停 `cswap auto --pause/--resume` | 安装包里是它打成的 wheel，`install.sh` 用 `uv tool install` 安装。systemd 服务 `cswap-auto` |
-| [cswap-status-vscode/](cswap-status-vscode/) | VS Code 插件：左侧活动栏的 cswap 侧边栏（账号用量圆环 / 自动切换 / API Worker 三个面板）和状态栏。加账号、切换、设主账号、改上限和阈值、加 API key 都在侧边栏里做 | 安装包里带 vsix，`install.sh` 用 `code --install-extension` 安装 |
-| [agent-monitor/](agent-monitor/) | VS Code 插件 Agent Monitor（自己的 git 仓库，远程 github.com/cyuneo/cyuneo-agent-monitor，也在 VS Code 扩展市场上）：看所有 Claude Code / Codex 会话；额度用完时，cswap 一换号就自动续跑 | 安装包里带它打成的 vsix（`agent-monitor/scripts/build-vsix.py`），`install.sh` 装上；已装的版本更新就不动 |
-| [api-worker/](api-worker/) | Claude Code 插件：把任务交给用 Console API key 计费的后台 Agent SDK worker，或开云端会话 | `install.sh` 装 Python 环境和 `api-worker` 命令，并把插件注册到安装好的副本 |
-| [cswap-hooks/](cswap-hooks/) | 每次切换后运行的钩子：统一推理强度（pin-effort）并记日志 | `~/.local/bin/cswap-on-switch` 链接到 `on-switch.sh`，cswap 设置 `autoswitch.onSwitchCommand` 指向它 |
-| [cswap-remote/](cswap-remote/) | 手机网页：看会话、回答权限提示、切账号 | systemd 服务 `cswap-remote`（`~/.local/bin/cswap-remote serve --host tailscale`） |
-| [cswap-satellite/](cswap-satellite/) | 在别的电脑上用 setup-token 使用这些账号，并同步用量 | `~/.local/bin/cswap-satellite`；只在那些电脑上开定时器 `cswap-satellite-usage.timer`（保存真实登录的那台不用开） |
-| [suite/](suite/) | 全套安装包：`install.sh`（一键安装）、`test.sh`（全部测试）、`build.py`（打包）、说明、后台服务配置 | `python3 suite/build.py [--install]` 生成 `dist/cswap-suite.tar.gz` |
-| [dist/](dist/) | `cswap-suite.tar.gz`（全套安装包，VS Code 插件的 vsix 在里面）；`archive/` 放旧版本。不进 git | 见上一行 |
-
-## 新机器
-
-只要 `dist/cswap-suite.tar.gz` 一个文件，不用下载原来的 claude-swap 项目：
-
-```bash
-scp dist/cswap-suite.tar.gz 新机器:
-ssh 新机器 'tar xzf cswap-suite.tar.gz && ./cswap-suite/install.sh'   # 加 --auto：自动切换常驻后台
-```
-
-新机器上要先有 Claude Code 和 uv。装到 `~/.local/share/cswap-suite`，命令在 `~/.local/bin`。安装包里不含账号、令牌、key，打包时会检查；`VERSION` 里记着打包时的 git 提交。
-
-## 运行中的服务（systemd 用户服务）
-
-```bash
-systemctl --user status cswap-auto cswap-remote
-journalctl --user -u cswap-auto -n 50        # 自动切换的日志（只写账号号码，不写邮箱）
-```
-
-暂停自动切换用 `cswap auto --pause 2h`（或 `forever`），恢复用 `cswap auto --resume`。VS Code 的「自动切换」面板里也有按钮。不要用 `systemctl stop` 来暂停：重新登录后服务会自己起来。
-
-## 数据和日志在哪
-
-| 路径 | 内容 |
-| --- | --- |
-| `~/.local/share/claude-swap/` | cswap 的数据：`settings.json`、`account_limits.json`（个人上限）、`autoswitch_status.json`（服务每次检查后写的状态）、`autoswitch_history.jsonl`（切换历史，只有号码）。`credentials/` 是登录凭据，不要拷贝或分享 |
-| `~/.local/state/cswap-hooks/hook.log` | 钩子日志 |
-| `~/.config/cswap-hooks/effort.json` | pin-effort 选的推理强度 |
-| `~/.config/api-worker/` | api-worker 的 key（权限 0600）和配置 |
-| `~/.local/share/api-worker/` | api-worker 的 Python 环境、任务记录、cloud desk |
-
-## 各部分之间怎么连
-
-- VS Code 插件、cswap-remote、api-worker 都只通过 `cswap policy list --json` 读账号和自动切换状态（只读本地数据，不联网），切换时调用 `cswap switch N`。字段说明见 claude-swap 的 README。
-- 任何一次切换（自动或手动）都会运行钩子，并记进 `autoswitch_history.jsonl`。
-- 服务和设置里引用的程序都走 `~/.local/bin/` 下的链接，指向 `~/.local/share/cswap-suite`；`install.sh` 每次都会重写。
-
-## 测试
-
-```bash
-suite/test.sh                  # 全部
-suite/test.sh vscode remote    # 只跑某几部分：cswap api-worker hooks satellite remote vscode
-```
-
-没有装 node 时，JavaScript 测试用 VS Code Server 自带的 node。
+Claude and Claude Code are products of Anthropic. This is an independent personal project that works with them; it is not affiliated with Anthropic.
