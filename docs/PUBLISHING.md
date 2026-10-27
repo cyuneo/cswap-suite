@@ -35,7 +35,7 @@ install -m 755 "gh_${v}_linux_amd64/bin/gh" ~/.local/bin/gh
 ```bash
 gh auth login -h github.com -p https -w   # 显示验证码，在浏览器 github.com/login/device 输入并授权
 gh auth setup-git                         # git push 也用 gh 的登录
-gh auth status                            # 确认登录的是 cyuneo
+gh auth status                            # 确认登录的账号是 cyuneo 组织的管理员（现在用的是 cyuneoai-art）
 ```
 
 令牌由 gh 保存，不要复制到聊天、文件或提交里。
