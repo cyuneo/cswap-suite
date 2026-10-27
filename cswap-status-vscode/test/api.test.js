@@ -22,13 +22,13 @@ const T = ext._test;
 
 const LIST = {
   tasks: [
-    { id: "t11111111", kind: "api", title: "write tests", state: "running", key: "jj", budgetUsd: 2, createdAt: 2 },
+    { id: "t11111111", kind: "api", title: "write tests", state: "running", key: "work", budgetUsd: 2, createdAt: 2 },
     { id: "t22222222", kind: "cloud", title: "cloud job", state: "running", account: "3", sessionUrl: "https://claude.ai/code/s", createdAt: 1 },
-    { id: "t33333333", kind: "api", title: "old", state: "done", key: "jj", costUsd: 0.42, createdAt: 0 },
+    { id: "t33333333", kind: "api", title: "old", state: "done", key: "work", costUsd: 0.42, createdAt: 0 },
   ],
   keys: [
-    { name: "jj", spentUsd: 10, reservedUsd: 2, monthlyBudgetUsd: 200, leftUsd: 188 },
-    { name: "gmail", spentUsd: 95, reservedUsd: 0, monthlyBudgetUsd: 100, leftUsd: 5 },
+    { name: "work", spentUsd: 10, reservedUsd: 2, monthlyBudgetUsd: 200, leftUsd: 188 },
+    { name: "personal", spentUsd: 95, reservedUsd: 0, monthlyBudgetUsd: 100, leftUsd: 5 },
   ],
 };
 const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((c) => c.argv);
@@ -50,7 +50,7 @@ const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((
   stub.config.statusBar = "full";
   await T.refreshApi();
   assert.match(apiItem.text, /API 剩 \$193\.00 · 2 个运行中/);
-  assert.match(apiItem.tooltip.value, /\| gmail \| \$95\.00 \| \$0\.00 \| \$100\.00 \| \$5\.00 \|/);
+  assert.match(apiItem.tooltip.value, /\| personal \| \$95\.00 \| \$0\.00 \| \$100\.00 \| \$5\.00 \|/);
   assert.ok(apiItem.visible);
   stub.config.statusBar = "off";
   await T.refreshApi();
@@ -68,7 +68,7 @@ const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((
   assert.match(keys[0].description, /剩 \$188\.00 \/ \$200\.00/);
   const running = tree.getChildren(groups[1]);
   assert.deepStrictEqual(running.map((t) => t.contextValue), ["apiTask.api.running", "apiTask.cloud.running"]);
-  assert.strictEqual(running[0].description, "t11111111 · key jj · 运行中");
+  assert.strictEqual(running[0].description, "t11111111 · key work · 运行中");
   // a cloud session still starting counts as in progress
   assert.strictEqual(T.format.isRunning({ state: "launching" }), true);
   assert.strictEqual(T.format.taskStateZh("launching"), "启动中");
@@ -129,12 +129,12 @@ const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((
   );
 
   // dispatch: the prompt (even one starting with a dash) goes on stdin, not argv
-  worker.set({ start: { out: { id: "t44444444", key: "gmail", branch: null } }, list: { out: LIST } });
+  worker.set({ start: { out: { id: "t44444444", key: "personal", branch: null } }, list: { out: LIST } });
   answers.input.push("-x rewrite the parser", "3");
-  answers.pick.push((items) => items.find((i) => i.key === "gmail"), (items) => [items[0]]);
+  answers.pick.push((items) => items.find((i) => i.key === "personal"), (items) => [items[0]]);
   await T.dispatchTask();
   const start = worker.calls().find((c) => c.argv[0] === "start");
-  assert.deepStrictEqual(start.argv, ["start", "--cwd", tmp, "--budget", "3", "--key", "gmail", "--allow-bash"]);
+  assert.deepStrictEqual(start.argv, ["start", "--cwd", tmp, "--budget", "3", "--key", "personal", "--allow-bash"]);
   assert.strictEqual(start.stdin, "-x rewrite the parser\n");
   assert.ok(shown.info.some((m) => m.includes("已派发 t44444444")));
   // a start that prints no JSON still confirms
@@ -160,12 +160,12 @@ const listCalls = () => worker.calls().filter((c) => c.argv[0] === "list").map((
   assert.strictEqual(shown.info.pop(), "已保存 key「work」，每月预算 $50.00。");
   answers.input.push("120");
   await T.apiView.setKeyBudget(keyRows[0]);
-  assert.deepStrictEqual([setKeys()[1].argv, setKeys()[1].stdin], [["set-key", "--name", "jj", "--budget", "120"], ""]);
+  assert.deepStrictEqual([setKeys()[1].argv, setKeys()[1].stdin], [["set-key", "--name", "work", "--budget", "120"], ""]);
   answers.warn.push(undefined);
   await T.apiView.removeKey(keyRows[1]);
   answers.warn.push("删除");
   await T.apiView.removeKey(keyRows[1]);
-  assert.deepStrictEqual(worker.calls().filter((c) => c.argv[0] === "remove-key").map((c) => c.argv), [["remove-key", "gmail"]]);
+  assert.deepStrictEqual(worker.calls().filter((c) => c.argv[0] === "remove-key").map((c) => c.argv), [["remove-key", "personal"]]);
   // a name that is not a key name never reaches api-worker
   const callsBefore = worker.calls().length;
   await T.apiView.removeKey({ apiKey: { name: "--all" } });

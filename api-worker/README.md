@@ -74,14 +74,14 @@ api-worker close <id>          # 把做完的云端任务标记为已结束
 每个账号的 Console 组织各有一份 API 额度，可以都存进来，每个 key 有自己的每月上限：
 
 ```bash
-api-worker set-key --name jj --budget 200       # 粘贴 key，输入不显示
-api-worker set-key --name gmail --budget 100
+api-worker set-key --name work --budget 200       # 粘贴 key，输入不显示
+api-worker set-key --name personal --budget 100
 api-worker set-key --name work --command 'op read op://Private/Claude API/credential'
 api-worker spend                                # 每个 key 本月花了多少、还剩多少
-api-worker remove-key gmail
+api-worker remove-key personal
 ```
 
-派任务时默认用本月剩得最多的 key，也可以指定：「用 jj 那个 key 派给 API worker…」。以前用 `set-key` 存的那一个叫 `default`。
+派任务时默认用本月剩得最多的 key，也可以指定：「用 work 那个 key 派给 API worker…」。以前用 `set-key` 存的那一个叫 `default`。
 
 ## 云端会话
 
