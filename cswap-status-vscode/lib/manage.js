@@ -110,7 +110,8 @@ async function loginAndAdd(opts) {
         return;
       }
       if ((await addCurrent()) && back) {
-        if (await accounts.runCswap(["switch", String(back.number)], { title: `切回 #${back.number}…`, quiet: true }))
+        // switching back is not a choice of account: no manual hold in cswap auto
+        if (await accounts.runCswap(["switch", String(back.number), "--no-hold"], { title: `切回 #${back.number}…`, quiet: true, optional: "--no-hold" }))
           vscode.window.setStatusBarMessage(`$(check) #${row.number} 已重新登录，已切回 #${back.number}`, 8000);
       }
       return;

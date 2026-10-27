@@ -369,7 +369,10 @@ class AccountSwitchTests(Base):
         super().setUp()
         self.log = Path(self.tmp.name) / "switches"
         exe = Path(self.tmp.name) / "cswap"
-        exe.write_text(f'#!/bin/sh\necho "$2" >> "{self.log}"\n')
+        # an old cswap (FAKE_OLD_CSWAP) rejects --no-hold the way argparse does
+        exe.write_text(f'#!/bin/sh\nif [ -n "$FAKE_OLD_CSWAP" ] && [ "$3" = --no-hold ]; then\n'
+                       f'  echo "error: unrecognized arguments: --no-hold" >&2; exit 2\nfi\n'
+                       f'echo "$2" >> "{self.log}"\necho "$*" >> "{self.log}.argv"\n')
         exe.chmod(0o755)
         self._patched = {n: getattr(api_worker, n) for n in ("cswap_bin", "cswap_accounts")}
         api_worker.cswap_bin = lambda: str(exe)
@@ -392,6 +395,26 @@ class AccountSwitchTests(Base):
         with open(api_worker.data_dir() / "account-switch.lock", "w") as f:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)  # raises if still held
         return True
+
+    def argv(self):
+        p = Path(str(self.log) + ".argv")
+        return p.read_text().splitlines() if p.exists() else []
+
+    def test_switches_start_no_manual_hold(self):
+        self.active = ["2", "1", "1"]
+        with api_worker.AccountSwitch("1"):
+            pass
+        self.assertEqual(self.argv(), ["switch 1 --no-hold", "switch 2 --no-hold"])
+
+    def test_an_older_cswap_without_no_hold_still_switches(self):
+        self.active = ["2", "1", "1"]
+        os.environ["FAKE_OLD_CSWAP"] = "1"
+        try:
+            with api_worker.AccountSwitch("1"):
+                pass
+        finally:
+            del os.environ["FAKE_OLD_CSWAP"]
+        self.assertEqual(self.argv(), ["switch 1", "switch 2"])
 
     def test_refuses_when_the_active_account_cannot_be_read(self):
         self.active = [None]

@@ -66,9 +66,15 @@ async function runCswap(args, opts) {
     vscode.window.showErrorMessage(state.error || "cswap 未找到");
     return null;
   }
+  const once = (a) => exec(bin, a, { timeout: o.timeout || 60000, input: o.input, env: { ...process.env, NO_COLOR: "1" } });
   const r = await vscode.window.withProgress(
     { location: o.quiet ? vscode.ProgressLocation.Window : vscode.ProgressLocation.Notification, title: o.title || `cswap ${args[0]}…` },
-    () => exec(bin, args, { timeout: o.timeout || 60000, input: o.input, env: { ...process.env, NO_COLOR: "1" } })
+    async () => {
+      const first = await once(args);
+      // an older cswap without an optional flag: once more without it
+      if (first.code !== 0 && o.optional && String(first.err).includes(o.optional)) return once(args.filter((a) => a !== o.optional));
+      return first;
+    }
   );
   runtime.refreshAccounts();
   if (r.code !== 0) {

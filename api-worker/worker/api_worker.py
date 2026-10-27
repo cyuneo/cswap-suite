@@ -621,6 +621,18 @@ def active_account():
     return next((x for x in cswap_accounts() if x["active"]), None)
 
 
+def cswap_switch(exe, number):
+    """`cswap switch N --no-hold`: a borrowed account is not the user's
+    choice, so cswap auto must not hold it (or the one switched back to) as
+    if it were. An older cswap without the flag gets the plain switch."""
+    run = lambda *extra: subprocess.run([exe, "switch", number, *extra], capture_output=True, text=True,
+                                        timeout=60, stdin=subprocess.DEVNULL)
+    r = run("--no-hold")
+    if r.returncode != 0 and "--no-hold" in (r.stderr or ""):
+        r = run()
+    return r
+
+
 class AccountSwitch:
     """Makes `number` the live Claude login for a moment and switches back.
     Every running Claude Code session shares that login meanwhile, so this is
@@ -660,8 +672,7 @@ class AccountSwitch:
                 return self
             self.previous = active["number"]  # from here on, any way out switches back
             try:
-                r = subprocess.run([self.exe, "switch", self.number], capture_output=True, text=True,
-                                   timeout=60, stdin=subprocess.DEVNULL)
+                r = cswap_switch(self.exe, self.number)
                 ok, err = r.returncode == 0, (r.stderr or r.stdout).strip()[-300:]
             except (OSError, subprocess.TimeoutExpired) as e:
                 ok, err = False, str(e)[-300:]
@@ -691,8 +702,7 @@ class AccountSwitch:
                     self.warning = (f"开会话期间当前账号被改成了 {now['number']}（多半是 cswap 自动切换），"
                                     f"所以没有切回 {self.previous}。")
                 else:  # still on the borrowed account, or unreadable: switch back
-                    r = subprocess.run([self.exe, "switch", self.previous], capture_output=True, text=True,
-                                       timeout=60, stdin=subprocess.DEVNULL)
+                    r = cswap_switch(self.exe, self.previous)
                     if r.returncode != 0:
                         self.warning = f"切回账号 {self.previous} 失败，请手动运行 cswap switch {self.previous}。"
         except (OSError, subprocess.TimeoutExpired):

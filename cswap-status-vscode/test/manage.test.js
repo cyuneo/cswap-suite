@@ -146,7 +146,7 @@ const waitFor = async (cond) => {
   loggedIn("w@x");
   await waitFor(() => calls("switch").length === 1);
   assert.strictEqual(calls("add").length, addsBefore + 1);
-  assert.deepStrictEqual(calls("switch")[0].argv, ["switch", "1"]);
+  assert.deepStrictEqual(calls("switch")[0].argv, ["switch", "1", "--no-hold"]);
   stub.closeTerminal(rt);
   // someone else logged in: not added under #2
   loggedIn("a@x");
@@ -181,6 +181,13 @@ const waitFor = async (cond) => {
   await M.setEnabled({ accountNumber: "2 --all" }, false);
   await M.remove({ accountNumber: "$(id)" });
   assert.strictEqual(cswap.calls().length, before);
+
+  // an older cswap without --no-hold: the switch back runs once more without it
+  cswap.set({ ...OK, switch: { out: "Switched", rejectFlag: "--no-hold" }, "policy list": { out: { schemaVersion: 1, accounts: ROWS, autoswitch: { threshold: 98 } } } });
+  const errorsBefore = shown.error.length;
+  assert.ok(await require("../lib/accounts").runCswap(["switch", "1", "--no-hold"], { quiet: true, optional: "--no-hold" }));
+  assert.deepStrictEqual(calls("switch").slice(-2).map((c) => c.argv), [["switch", "1", "--no-hold"], ["switch", "1"]]);
+  assert.strictEqual(shown.error.length, errorsBefore);
 
   ext.deactivate();
   console.log("manage tests: OK");

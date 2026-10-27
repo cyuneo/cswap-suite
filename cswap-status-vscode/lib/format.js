@@ -175,6 +175,7 @@ const REASON_ZH = {
   "below-personal-limit": "低于个人上限",
   cooldown: "冷却中",
   "manual-hold": "手动切换后保持",
+  "active-changed": "检查期间当前账号被换过",
   "stale-usage": "用量数据太旧",
   "active-idle": "当前账号空闲",
   "active-usage-unknown": "当前账号用量未知",
