@@ -33,7 +33,14 @@ tar xzf cswap-suite.tar.gz
 
 ## 许可证
 
-本仓库用 [PolyForm Noncommercial 1.0.0](LICENSE)：可以使用、修改、分享，但不能用于商业用途。claude-swap 保留原项目的 MIT 许可证，感谢原作者 Onur Cetinkol。
+本仓库用 [PolyForm Noncommercial 1.0.0](LICENSE)：可以使用、修改、分享，但不能用于商业用途。用到的第三方项目和它们的许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 致谢
+
+- [claude-swap](https://github.com/realiti4/claude-swap)（Onur Cetinkol，MIT）：这里的 cswap 在它的基础上修改，保留原项目的许可证。
+- 开发过程中借助了 Claude Code 编写和审查代码。
+
+Claude 和 Claude Code 是 Anthropic 的产品；本项目只是配合它们使用的个人工具，与 Anthropic 没有关联。
 
 ---
 

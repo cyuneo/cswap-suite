@@ -1,5 +1,6 @@
 {
   "name": "api-worker",
   "version": "0.5.0",
-  "description": "Dispatch background Agent SDK tasks billed to your Console API key (plan API credits), not your Claude Code subscription."
+  "description": "Dispatch background Agent SDK tasks billed to your Console API key (plan API credits), not your Claude Code subscription.",
+  "license": "PolyForm-Noncommercial-1.0.0"
 }

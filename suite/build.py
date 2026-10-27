@@ -128,6 +128,9 @@ def main():
         info = [f"api-worker {stamp_plugin_version(top / 'api-worker')}" if x.startswith("api-worker ") else x for x in info]
         shutil.copy2(SUITE / "install.sh", top / "install.sh")
         shutil.copy2(SUITE / "README.md", top / "README.md")
+        # the terms and the third-party notices travel with every copy
+        shutil.copy2(ROOT / "LICENSE", top / "LICENSE")
+        shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", top / "THIRD_PARTY_NOTICES.md")
         shutil.copytree(SUITE / "systemd", top / "systemd")
         (top / "VERSION").write_text("\n".join(info) + "\n", encoding="utf-8")
         check_secrets(top)

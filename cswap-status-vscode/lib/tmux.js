@@ -53,7 +53,7 @@ async function startInTmux(cont) {
   });
   term.show();
   vscode.window.setStatusBarMessage(
-    `已在 tmux 会话 ${name} 里启动 Claude，手机上的 Claude Remote 可以操作它。关掉这个终端不会结束会话（tmux attach -t ${name} 接回来）。`,
+    `已在 tmux 会话 ${name} 里启动 Claude，手机上的 cswap Remote 可以操作它。关掉这个终端不会结束会话（tmux attach -t ${name} 接回来）。`,
     15000
   );
 }

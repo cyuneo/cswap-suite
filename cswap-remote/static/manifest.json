@@ -1,6 +1,6 @@
 {
-  "name": "Claude Remote",
-  "short_name": "Claude",
+  "name": "cswap Remote",
+  "short_name": "cswap",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

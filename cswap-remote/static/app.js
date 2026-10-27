@@ -363,7 +363,7 @@
     const s = $("#headSub");
     s.textContent = sub || "";
     s.classList.toggle("hidden", !sub);
-    document.title = title === "Claude Remote" ? title : title + " · Claude Remote";
+    document.title = title === "cswap Remote" ? title : title + " · cswap Remote";
   }
   $("#back").onclick = () => { go(backHash || ""); };
   $("#acct").onclick = () => { go("accounts"); };
@@ -460,7 +460,7 @@
 
   function showLogin() {
     newView();
-    setHeader("Claude Remote", null);
+    setHeader("cswap Remote", null);
     $("#acct").classList.add("hidden");
     const inp = h("input", { class: "text-input", autocomplete: "off", autocapitalize: "off" });
     const ok = h("button", { class: "primary", type: "button", text: "登录" });

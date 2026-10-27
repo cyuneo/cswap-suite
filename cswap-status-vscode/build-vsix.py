@@ -29,6 +29,7 @@ def files():
     out += [(p, f"lib/{p.name}") for p in sorted((HERE / "lib").glob("*.js"))]
     out += [(p, f"media/{p.name}") for p in sorted((HERE / "media").iterdir()) if p.is_file()]
     out.append((SATELLITE, "satellite/cswap_satellite.py"))
+    out.append((HERE.parent / "LICENSE", "LICENSE"))
     return out
 
 
