@@ -66,7 +66,7 @@ git push -u origin main
 ### claude-swap（fork）
 
 ```bash
-gh repo fork realiti4/claude-swap --clone=false --default-branch-only
+gh repo fork realiti4/claude-swap --org cyuneo --clone=false --default-branch-only   # 不加 --org 会 fork 到登录账号自己名下
 cd claude-swap
 git remote add origin https://github.com/cyuneo/claude-swap.git
 git remote add upstream https://github.com/realiti4/claude-swap.git   # 以后想看原项目的更新时用
